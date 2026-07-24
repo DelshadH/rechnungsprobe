@@ -1,0 +1,40 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "rechnungsprobe"
+version = "0.0.0"
+description = "Validity-preserving compatibility testing for XRechnung importers"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Rechnungsprobe contributors" }]
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2",
+  "mypy>=1.16",
+  "pytest>=8.4",
+  "ruff>=0.12",
+]
+
+[project.scripts]
+rechnungsprobe = "rechnungsprobe.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rechnungsprobe"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["rechnungsprobe"]
