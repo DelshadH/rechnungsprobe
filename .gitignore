@@ -11,4 +11,5 @@ build/
 htmlcov/
 .hypothesis/
 *.rechnungsprobe
+.work/
 .DS_Store

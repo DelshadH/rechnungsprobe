@@ -7,10 +7,12 @@ name = "rechnungsprobe"
 version = "0.0.0"
 description = "Validity-preserving compatibility testing for XRechnung importers"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.11,<3.14"
 license = "Apache-2.0"
 authors = [{ name = "Rechnungsprobe contributors" }]
-dependencies = []
+dependencies = [
+  "psutil>=6.1,<8",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -18,6 +20,7 @@ dev = [
   "mypy>=1.16",
   "pytest>=8.4",
   "ruff>=0.12",
+  "types-psutil>=7.0",
 ]
 
 [project.scripts]
@@ -25,6 +28,9 @@ rechnungsprobe = "rechnungsprobe.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/rechnungsprobe"]
+
+[tool.hatch.build.targets.wheel.force-include]
+third_party = "rechnungsprobe/third_party"
 
 [tool.pytest.ini_options]
 addopts = "-q"

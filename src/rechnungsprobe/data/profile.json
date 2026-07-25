@@ -1,0 +1,25 @@
+{
+  "configuration": {
+    "filename": "xrechnung-3.0.2-validator-configuration-2026-01-31.zip",
+    "license": "Apache-2.0 with retained XRechnung/EN 16931 notice",
+    "sha256": "6a5a5911a421b25fbc423f62f93f894df7b236f5d73ca4f84bb222a945082704",
+    "url": "https://github.com/itplr-kosit/validator-configuration-xrechnung/releases/download/v2026-01-31/xrechnung-3.0.2-validator-configuration-2026-01-31.zip",
+    "version": "2026-01-31"
+  },
+  "id": "xrechnung-ubl-3.0.2-2026-01-31",
+  "seed": {
+    "filename": "01.01a-INVOICE_ubl.xml",
+    "license": "Apache-2.0",
+    "sha256": "3558d8eee6499350f69c150b54b4019556458667cfc972beaa9bb7bf1e11303f",
+    "source": "https://github.com/itplr-kosit/xrechnung-testsuite/blob/v2026-01-31/src/test/business-cases/standard/01.01a-INVOICE_ubl.xml"
+  },
+  "syntax": "ubl-invoice-2.1",
+  "validator": {
+    "filename": "validator-1.6.2-standalone.jar",
+    "license": "Apache-2.0",
+    "sha256": "244978514ad48f67c7573acfffc8f4fd73d81feda6f276710033f9913579857e",
+    "url": "https://github.com/itplr-kosit/validator/releases/download/v1.6.2/validator-1.6.2-standalone.jar",
+    "version": "1.6.2"
+  },
+  "xrechnung": "3.0.2"
+}
