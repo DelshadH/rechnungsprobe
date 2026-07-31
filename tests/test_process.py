@@ -187,14 +187,22 @@ def test_bounded_process_kills_descendants_after_the_parent_exits(tmp_path: Path
 
     assert result.termination == "exited"
     child_pid = int(pid_file.read_text())
+    child: psutil.Process | None = None
     try:
-        if psutil.pid_exists(child_pid):
+        try:
             child = psutil.Process(child_pid)
+        except psutil.NoSuchProcess:
+            # The process can disappear between pid_exists/Process on POSIX.
+            pass
+        if child is not None:
             child.wait(timeout=2)
             assert not child.is_running()
     finally:
-        if psutil.pid_exists(child_pid):
-            psutil.Process(child_pid).kill()
+        try:
+            if child is not None and child.is_running():
+                child.kill()
+        except psutil.NoSuchProcess:
+            pass
 
 
 @pytest.mark.skipif(os.name != "nt", reason="NTFS junction behavior is Windows-specific")
