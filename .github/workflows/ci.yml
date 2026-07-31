@@ -39,10 +39,10 @@ jobs:
           python -m mypy --platform win32
       - name: Smoke-test the installed wheel outside the checkout
         run: >-
-          python -c "import os,subprocess,sys,tempfile;
-          d=tempfile.mkdtemp();
-          subprocess.check_call([sys.executable,'-c',
-          'from rechnungsprobe.cli import main; assert main([\"--version\"]) == 0'],cwd=d)"
+          python -c "import os,tempfile;
+          os.chdir(tempfile.mkdtemp());
+          from rechnungsprobe.cli import main;
+          assert main(['--version']) == 0"
 
   metadata:
     name: Metadata and security gates
