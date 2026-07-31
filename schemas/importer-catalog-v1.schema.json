@@ -1,0 +1,31 @@
+{
+  "$id": "https://rechnungsprobe.dev/schemas/importer-catalog-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "as_of": {"format": "date", "type": "string"},
+    "build_command": {"type": "string"},
+    "importers": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "adapter": {"type": "string"},
+          "image": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+          "license": {"type": "string"},
+          "repository": {"format": "uri", "type": "string"},
+          "runtime_commit": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+          "selection_commit": {"pattern": "^[0-9a-f]{40}$", "type": "string"},
+          "version": {"type": "string"},
+          "version_integrity": {"type": "string"}
+        },
+        "required": ["adapter", "image", "license", "repository", "selection_commit", "version"],
+        "type": "object"
+      },
+      "minItems": 5,
+      "type": "array"
+    },
+    "schema": {"const": "https://rechnungsprobe.dev/schemas/importer-catalog-v1"}
+  },
+  "required": ["as_of", "build_command", "importers", "schema"],
+  "type": "object"
+}

@@ -81,6 +81,21 @@ def test_safe_extract_writes_only_regular_bounded_files(tmp_path: Path) -> None:
     assert (output / "one" / "two.txt").read_bytes() == b"ok"
 
 
+def test_safe_extract_accepts_unix_permissions_without_file_type_bits(
+    tmp_path: Path,
+) -> None:
+    archive = tmp_path / "permission-only.zip"
+    entry = zipfile.ZipInfo("ordinary.txt")
+    entry.create_system = 3
+    entry.external_attr = 0o600 << 16
+    with zipfile.ZipFile(archive, "w") as output:
+        output.writestr(entry, b"ok")
+
+    destination = tmp_path / "output"
+    assert safe_extract_zip(archive, destination) == (destination / "ordinary.txt",)
+    assert (destination / "ordinary.txt").read_bytes() == b"ok"
+
+
 def test_failed_extract_preserves_caller_owned_destination(tmp_path: Path) -> None:
     archive_path = tmp_path / "corrupt.zip"
     _write_zip(

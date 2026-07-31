@@ -1,0 +1,102 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build, inventory, and attest
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Use the exact commit timestamp
+        run: echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)" >> "$GITHUB_ENV"
+      - run: python -m pip install --require-hashes -r requirements/ci.txt
+      - name: Require the tag to equal the project version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import os
+          import pathlib
+          import tomllib
+
+          version = tomllib.loads(pathlib.Path("pyproject.toml").read_text())["project"]["version"]
+          expected = f"v{version}"
+          if os.environ["RELEASE_TAG"] != expected:
+              raise SystemExit(f"release tag must be exactly {expected}")
+          PY
+      - run: python -m build --no-isolation
+      - name: Generate checksums
+        run: mkdir release && cd dist && sha256sum *.whl *.tar.gz > ../release/SHA256SUMS
+      - name: Materialize the exact runtime environment for the SBOM
+        run: |
+          python -m venv --without-pip .sbom-venv
+          python -m pip --python .sbom-venv/bin/python install --require-hashes -r requirements/runtime.txt
+          python -m pip --python .sbom-venv/bin/python install --no-deps dist/*.whl
+      - name: Generate a reproducible CycloneDX runtime SBOM
+        run: |
+          cyclonedx-py environment .sbom-venv/bin/python \
+            --pyproject pyproject.toml \
+            --mc-type application \
+            --spec-version 1.6 \
+            --output-reproducible \
+            --output-format JSON \
+            --output-file release/rechnungsprobe.cdx.json
+      - uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3.0.0
+        with:
+          subject-path: dist/rechnungsprobe-*
+      - uses: actions/attest-sbom@51e74621a501c89df81fc1391c5a8f4cfc9fab2f # v3.0.0
+        with:
+          subject-path: dist/rechnungsprobe-*
+          sbom-path: release/rechnungsprobe.cdx.json
+      - uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          name: release-distributions
+          path: |
+            dist/
+            release/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish exact attested distributions
+    if: github.repository == 'DelshadH/rechnungsprobe'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/project/rechnungsprobe/
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: release-distributions
+          path: bundle
+      - uses: pypa/gh-action-pypi-publish@ba38be9e461d3875417946c167d0b5f3d385a247 # release/v1
+        with:
+          packages-dir: bundle/dist
+          attestations: true
+      - name: Create the GitHub release from the published bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create "$GITHUB_REF_NAME"
+          bundle/dist/* bundle/release/*
+          --verify-tag --generate-notes

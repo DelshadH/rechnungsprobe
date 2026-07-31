@@ -1,0 +1,15 @@
+{
+  "$id": "https://rechnungsprobe.dev/schemas/research-results-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "corpus_gate": {"additionalProperties": false, "properties": {"corpus_root_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}, "evidence_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "unique_semantic_fingerprints": {"minimum": 1, "type": "integer"}, "validated_count": {"minimum": 1, "type": "integer"}, "validation_root_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}}, "required": ["corpus_root_sha256", "evidence_sha256", "unique_semantic_fingerprints", "validated_count", "validation_root_sha256"], "type": "object"},
+    "finding_count": {"minimum": 0, "type": "integer"},
+    "findings": {"items": {"additionalProperties": false, "properties": {"capsule_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "evidence_id": {"pattern": "^RP-[0-9]{4}-[0-9]{3}$", "type": "string"}, "finding_kind": {"type": "string"}, "one_minimal": {"type": "boolean"}, "reproductions": {"minimum": 1, "type": "integer"}}, "required": ["capsule_sha256", "evidence_id", "finding_kind", "one_minimal", "reproductions"], "type": "object"}, "type": "array"},
+    "profile_id": {"type": "string"},
+    "schema": {"const": "https://rechnungsprobe.dev/schemas/research-results-v1"},
+    "status": {"const": "passed"}
+  },
+  "required": ["corpus_gate", "finding_count", "findings", "profile_id", "schema", "status"],
+  "type": "object"
+}

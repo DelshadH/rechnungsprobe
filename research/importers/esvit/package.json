@@ -1,0 +1,8 @@
+{
+  "name": "rechnungsprobe-esvit-adapter",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "einvoicing": "0.0.3"
+  }
+}

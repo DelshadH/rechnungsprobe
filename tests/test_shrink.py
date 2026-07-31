@@ -124,3 +124,40 @@ def test_shrinker_is_deterministic() -> None:
     )
 
     assert first == second
+
+
+def test_shrinker_batches_independent_profile_checks_without_changing_order() -> None:
+    seed = parse_invoice(bundled_seed_path())
+    finding = replace(seed, note="TRIGGER-" + ("noise" * 8))
+    validated: set[bytes] = set()
+    batch_sizes: list[int] = []
+
+    def is_valid(candidate: bytes) -> bool:
+        parse_invoice(candidate)
+        validated.add(candidate)
+        return True
+
+    def validate_batch(candidates: tuple[bytes, ...]) -> tuple[bool, ...]:
+        batch_sizes.append(len(candidates))
+        for candidate in candidates:
+            parse_invoice(candidate)
+            validated.add(candidate)
+        return (True,) * len(candidates)
+
+    def preserves_finding(candidate: bytes) -> bool:
+        assert candidate in validated
+        return b"TRIGGER" in candidate
+
+    result = shrink_invoice(
+        finding,
+        is_valid=is_valid,
+        preserves_finding=preserves_finding,
+        validate_batch=validate_batch,
+    )
+
+    assert result == shrink_invoice(
+        finding,
+        is_valid=is_valid,
+        preserves_finding=preserves_finding,
+    )
+    assert any(size > 1 for size in batch_sizes)

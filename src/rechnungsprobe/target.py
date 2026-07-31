@@ -14,7 +14,9 @@ from rechnungsprobe.security import SecurityError, open_regular_file
 from rechnungsprobe.xmlsafe import parse_xml_bytes
 
 InputMode = Literal["stdin", "file"]
-_IMAGE_DIGEST = re.compile(r"^[a-z0-9][a-z0-9._/:-]*@sha256:[0-9a-f]{64}$")
+_IMAGE_DIGEST = re.compile(
+    r"^(?:sha256:[0-9a-f]{64}|[a-z0-9][a-z0-9._/:-]*@sha256:[0-9a-f]{64})$"
+)
 _DRIVE_PREFIX = re.compile(r"^[A-Za-z]:")
 
 
@@ -134,6 +136,33 @@ def resolve_local_target(target: LocalTarget) -> LocalTarget:
     )
 
 
+def _stage_local_command(
+    command: tuple[str, ...],
+    *,
+    workspace: Path,
+) -> tuple[str, ...]:
+    staged = list(command)
+    stage_root = workspace / ".target-files"
+    stage_root.mkdir()
+    for index, argument in enumerate(command[1:], start=1):
+        source = Path(argument)
+        if not source.is_file():
+            continue
+        expected = _hash_regular_file(source)
+        suffix = source.suffix if re.fullmatch(r"\.[A-Za-z0-9]{1,10}", source.suffix) else ""
+        destination = stage_root / f"argument-{index:03d}{suffix}"
+        with (
+            open_regular_file(source, max_bytes=2 * 1024 * 1024 * 1024) as input_file,
+            destination.open("xb") as output_file,
+        ):
+            while chunk := input_file.read(1024 * 1024):
+                output_file.write(chunk)
+        if _hash_regular_file(destination) != expected:
+            raise SecurityError("local target file changed while it was staged")
+        staged[index] = os.fspath(destination)
+    return tuple(staged)
+
+
 def target_configuration_digest(target: LocalTarget | ContainerTarget) -> str:
     """Hash the executable/image plus every setting that changes target behavior."""
 
@@ -205,6 +234,7 @@ def run_local_target(
     workspace = _prepare_workspace(workspace)
     output_path = _output_path(workspace, target.output_file)
     digest, command = _local_target_digest(target)
+    command = _stage_local_command(command, workspace=workspace)
     if target.input_mode == "file":
         input_path = workspace / "input.xml"
         with input_path.open("xb") as output:
@@ -242,10 +272,14 @@ def build_docker_command(
         raise SecurityError("container workspace path cannot contain a comma")
     _output_path(workspace.absolute(), target.output_file)
     memory = str(policy.max_memory_bytes)
+    ownership = hashlib.sha256(os.fspath(workspace.absolute()).encode("utf-8")).hexdigest()
+    cidfile = workspace.absolute() / ".container.cid"
     command: list[str] = [
         "docker",
         "run",
         "--rm",
+        f"--cidfile={cidfile}",
+        f"--label=rechnungsprobe.run={ownership}",
         "--pull=never",
         "--network=none",
         "--read-only",
@@ -284,6 +318,65 @@ def build_docker_command(
     return tuple(command)
 
 
+def _cleanup_container(workspace: Path, policy: ProcessPolicy) -> None:
+    cidfile = workspace / ".container.cid"
+    identifiers: list[str] = []
+    if cidfile.exists():
+        with open_regular_file(cidfile, max_bytes=256) as source:
+            identifier = source.read(257).decode("ascii", errors="strict").strip()
+        if re.fullmatch(r"[0-9a-f]{12,64}", identifier) is None:
+            raise SecurityError("Docker cidfile contains an invalid container identifier")
+        identifiers.append(identifier)
+    else:
+        ownership = hashlib.sha256(os.fspath(workspace.absolute()).encode("utf-8")).hexdigest()
+        listed = run_bounded_process(
+            ("docker", "ps", "-aq", "--filter", f"label=rechnungsprobe.run={ownership}"),
+            cwd=workspace,
+            policy=ProcessPolicy(
+                timeout_seconds=min(10, policy.timeout_seconds),
+                cpu_seconds=min(5, policy.cpu_seconds),
+                max_memory_bytes=256 * 1024 * 1024,
+                max_processes=4,
+                max_output_bytes=16 * 1024,
+                max_file_growth_bytes=1024 * 1024,
+                max_created_files=8,
+            ),
+        )
+        if listed.termination == "exited" and listed.returncode == 0:
+            identifiers.extend(
+                identifier
+                for identifier in listed.stdout.decode("ascii", errors="strict").splitlines()
+                if re.fullmatch(r"[0-9a-f]{12,64}", identifier)
+            )
+    cleanup_policy = ProcessPolicy(
+        timeout_seconds=min(10, policy.timeout_seconds),
+        cpu_seconds=min(5, policy.cpu_seconds),
+        max_memory_bytes=256 * 1024 * 1024,
+        max_processes=4,
+        max_output_bytes=16 * 1024,
+        max_file_growth_bytes=1024 * 1024,
+        max_created_files=8,
+    )
+    for identifier in tuple(dict.fromkeys(identifiers))[:8]:
+        run_bounded_process(
+            ("docker", "kill", identifier),
+            cwd=workspace,
+            policy=cleanup_policy,
+        )
+        run_bounded_process(
+            ("docker", "rm", "-f", identifier),
+            cwd=workspace,
+            policy=cleanup_policy,
+        )
+        inspected = run_bounded_process(
+            ("docker", "inspect", identifier),
+            cwd=workspace,
+            policy=cleanup_policy,
+        )
+        if inspected.termination != "exited" or inspected.returncode in {None, 0}:
+            raise SecurityError("Docker container cleanup could not be verified")
+
+
 def run_container_target(
     target: ContainerTarget,
     invoice_xml: bytes,
@@ -307,12 +400,15 @@ def run_container_target(
             output_directory.chmod(0o733)
         output_path = _output_path(output_directory, target.output_file)
     command = build_docker_command(target, workspace=workspace, policy=policy)
-    process = run_bounded_process(
-        command,
-        cwd=workspace,
-        policy=policy,
-        input_bytes=input_bytes,
-    )
+    try:
+        process = run_bounded_process(
+            command,
+            cwd=workspace,
+            policy=policy,
+            input_bytes=input_bytes,
+        )
+    finally:
+        _cleanup_container(workspace, policy)
     return TargetResult(
         process=process,
         output_xml=_read_bounded_output(

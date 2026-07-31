@@ -8,15 +8,18 @@
   ZIP extraction.
 - `model`: typed XRechnung UBL invoice concepts, parsing, serialization, and
   canonical semantic fingerprints.
-- `mutators` and `corpus`: deterministic semantic transformations and recorded
-  corpus generation.
+- `mutators`, `corpus`, and `gates`: deterministic semantic transformations,
+  resumable/shardable corpus generation, and machine-readable official
+  validation evidence.
 - `validate`: bounded invocation of the vendored KoSIT validator with external
   XML access restricted to the extracted configuration repository.
-- `process` and `target`: bounded local execution and digest-pinned Docker
-  execution.
+- `process` and `target`: bounded process-tree execution, staged local files,
+  digest-pinned Docker execution, and verified daemon cleanup.
 - `predicates`: crash, timeout, stdout JSON, output-validity, and declared
   field-loss oracles.
 - `shrink`: structure-aware reduction and an independent 1-minimality check.
+- `findings`, `comparison`, and `provenance`: precise classification, normalized
+  semantic comparison, and complete campaign identity.
 - `reporting`, `capsule`, and `replay`: canonical JSON/JUnit reports,
   deterministic bounded finding archives, and exact replay specifications.
 - `campaign`: orchestration across generation, validation, execution, reduction,
@@ -33,7 +36,9 @@
 4. Run each valid candidate against the declared target and evaluate one
    predicate.
 5. On the first match, shrink typed invoice operations while revalidating and
-   preserving the same predicate and target digest.
+   preserving the same predicate and target digest. Independent candidates in
+   one frontier may share a KoSIT batch; target evaluations remain ordered and
+   uncached.
 6. Independently check 1-minimality, then revalidate and reproduce the reduced
    case the requested number of times.
 7. Export canonical reports and a deterministic finding capsule.

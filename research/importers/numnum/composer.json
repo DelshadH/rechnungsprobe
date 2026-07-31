@@ -1,0 +1,5 @@
+{
+  "require": {
+    "num-num/ubl-invoice": "2.4.1"
+  }
+}

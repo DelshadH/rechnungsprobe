@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import os
-import subprocess
+import signal
+import stat
+
+# This bounded argument-vector runner requires subprocess; shell use is disabled.
+import subprocess  # nosec B404
 import threading
 import time
 from collections.abc import Mapping, Sequence
@@ -112,6 +116,133 @@ def _kill_process_tree(process: subprocess.Popen[bytes]) -> None:
     psutil.wait_procs(children, timeout=1)
 
 
+class _ProcessContainment:
+    def __init__(self, process: subprocess.Popen[bytes], max_processes: int) -> None:
+        self._job: int | None = None
+        self._process_group = process.pid
+        if os.name != "nt":
+            return
+
+        import ctypes
+        from ctypes import wintypes
+
+        class IoCounters(ctypes.Structure):
+            _fields_ = [
+                ("ReadOperationCount", ctypes.c_ulonglong),
+                ("WriteOperationCount", ctypes.c_ulonglong),
+                ("OtherOperationCount", ctypes.c_ulonglong),
+                ("ReadTransferCount", ctypes.c_ulonglong),
+                ("WriteTransferCount", ctypes.c_ulonglong),
+                ("OtherTransferCount", ctypes.c_ulonglong),
+            ]
+
+        class BasicLimitInformation(ctypes.Structure):
+            _fields_ = [
+                ("PerProcessUserTimeLimit", ctypes.c_longlong),
+                ("PerJobUserTimeLimit", ctypes.c_longlong),
+                ("LimitFlags", wintypes.DWORD),
+                ("MinimumWorkingSetSize", ctypes.c_size_t),
+                ("MaximumWorkingSetSize", ctypes.c_size_t),
+                ("ActiveProcessLimit", wintypes.DWORD),
+                ("Affinity", ctypes.c_size_t),
+                ("PriorityClass", wintypes.DWORD),
+                ("SchedulingClass", wintypes.DWORD),
+            ]
+
+        class ExtendedLimitInformation(ctypes.Structure):
+            _fields_ = [
+                ("BasicLimitInformation", BasicLimitInformation),
+                ("IoInfo", IoCounters),
+                ("ProcessMemoryLimit", ctypes.c_size_t),
+                ("JobMemoryLimit", ctypes.c_size_t),
+                ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                ("PeakJobMemoryUsed", ctypes.c_size_t),
+            ]
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+        kernel32.CreateJobObjectW.argtypes = (ctypes.c_void_p, wintypes.LPCWSTR)
+        kernel32.SetInformationJobObject.argtypes = (
+            wintypes.HANDLE,
+            ctypes.c_int,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+        )
+        kernel32.AssignProcessToJobObject.argtypes = (wintypes.HANDLE, wintypes.HANDLE)
+        job = kernel32.CreateJobObjectW(None, None)
+        if not job:
+            _kill_process_tree(process)
+            raise SecurityError("could not create a Windows process containment job")
+        information = ExtendedLimitInformation()
+        information.BasicLimitInformation.LimitFlags = 0x2000 | 0x00000008
+        information.BasicLimitInformation.ActiveProcessLimit = max_processes
+        if not kernel32.SetInformationJobObject(
+            job,
+            9,
+            ctypes.byref(information),
+            ctypes.sizeof(information),
+        ) or not kernel32.AssignProcessToJobObject(
+            job,
+            process._handle,  # type: ignore[attr-defined]
+        ):
+            kernel32.CloseHandle(job)
+            _kill_process_tree(process)
+            raise SecurityError("could not assign the process containment job")
+        self._job = int(job)
+
+    def close(self) -> None:
+        if os.name == "nt":
+            if self._job is None:
+                return
+            import ctypes
+            from ctypes import wintypes
+
+            class BasicAccountingInformation(ctypes.Structure):
+                _fields_ = [
+                    ("TotalUserTime", ctypes.c_longlong),
+                    ("TotalKernelTime", ctypes.c_longlong),
+                    ("ThisPeriodTotalUserTime", ctypes.c_longlong),
+                    ("ThisPeriodTotalKernelTime", ctypes.c_longlong),
+                    ("TotalPageFaultCount", wintypes.DWORD),
+                    ("TotalProcesses", wintypes.DWORD),
+                    ("ActiveProcesses", wintypes.DWORD),
+                    ("TotalTerminatedProcesses", wintypes.DWORD),
+                ]
+
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
+            kernel32.QueryInformationJobObject.argtypes = (
+                wintypes.HANDLE,
+                ctypes.c_int,
+                ctypes.c_void_p,
+                wintypes.DWORD,
+                ctypes.c_void_p,
+            )
+            kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+            kernel32.TerminateJobObject(self._job, 1)
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline:
+                accounting = BasicAccountingInformation()
+                if not kernel32.QueryInformationJobObject(
+                    self._job,
+                    1,
+                    ctypes.byref(accounting),
+                    ctypes.sizeof(accounting),
+                    None,
+                ) or accounting.ActiveProcesses == 0:
+                    break
+                time.sleep(0.01)
+            kernel32.CloseHandle(self._job)
+            self._job = None
+            return
+        kill_process_group = getattr(os, "killpg", None)
+        if kill_process_group is not None:
+            try:
+                kill_process_group(self._process_group, getattr(signal, "SIGKILL", 9))
+            except ProcessLookupError:
+                pass
+
+
 def _resource_termination(root: psutil.Process, policy: ProcessPolicy) -> Termination | None:
     try:
         processes = [root, *root.children(recursive=True)]
@@ -150,12 +281,17 @@ def _directory_usage(root: Path, scan_limit: int) -> tuple[int, int, bool]:
             if entry_count > scan_limit:
                 return total_bytes, entry_count, True
             try:
-                if entry.is_symlink():
-                    continue
+                metadata = entry.stat(follow_symlinks=False)
+                if entry.is_symlink() or (
+                    os.name == "nt"
+                    and metadata.st_file_attributes
+                    & stat.FILE_ATTRIBUTE_REPARSE_POINT
+                ):
+                    return total_bytes, entry_count, True
                 if entry.is_dir(follow_symlinks=False):
                     pending.append(Path(entry.path))
                 elif entry.is_file(follow_symlinks=False):
-                    total_bytes += entry.stat(follow_symlinks=False).st_size
+                    total_bytes += metadata.st_size
             except OSError:
                 continue
     return total_bytes, entry_count, False
@@ -195,7 +331,8 @@ def run_bounded_process(
     creationflags = 0
     if os.name == "nt":
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
-    process = subprocess.Popen(
+    # Arguments were validated above and the shell remains disabled.
+    process = subprocess.Popen(  # nosec B603
         arguments,
         cwd=cwd,
         env=_clean_environment(environment, temporary_directory=cwd),
@@ -207,6 +344,7 @@ def run_bounded_process(
         creationflags=creationflags,
         start_new_session=os.name != "nt",
     )
+    containment = _ProcessContainment(process, policy.max_processes)
     started = time.monotonic()
     stdin = process.stdin
     stdout_stream = process.stdout
@@ -302,6 +440,7 @@ def run_bounded_process(
     except subprocess.TimeoutExpired:
         _kill_process_tree(process)
         returncode = process.wait(timeout=2)
+    containment.close()
     stdout_thread.join(timeout=2)
     stderr_thread.join(timeout=2)
     stdin_thread.join(timeout=2)

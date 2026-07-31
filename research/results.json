@@ -1,0 +1,36 @@
+{
+  "corpus_gate": {
+    "corpus_root_sha256": "sha256:7fb3a04261779dc211f277f26ec7626636a954b24f23326cd318fb681faa511b",
+    "evidence_sha256": "e9869ad79fe0461873a82c9e13c615a46cc631e1b008034d7105ced03701e685",
+    "unique_semantic_fingerprints": 10000,
+    "validated_count": 10000,
+    "validation_root_sha256": "sha256:1d85b79045877e66c1ea369bfc8977e5bd383ade1b649fbbeed438b5c1ecf11c"
+  },
+  "finding_count": 3,
+  "findings": [
+    {
+      "capsule_sha256": "fddf2949ff48bcde741afd5300042788be2ef88732731465c91d65d5bd4409f6",
+      "evidence_id": "RP-2026-001",
+      "finding_kind": "crash",
+      "one_minimal": true,
+      "reproductions": 5
+    },
+    {
+      "capsule_sha256": "23608586e84d943d4928a48fcafb7f71dd6121f1ff7bf0fb9bfb49f37c11707a",
+      "evidence_id": "RP-2026-002",
+      "finding_kind": "crash",
+      "one_minimal": true,
+      "reproductions": 5
+    },
+    {
+      "capsule_sha256": "d30e00f98df2e85f20cdac4cca000c0d7990d56a7ba36b3e12d5a9ee62cead6d",
+      "evidence_id": "RP-2026-003",
+      "finding_kind": "round-trip-loss",
+      "one_minimal": true,
+      "reproductions": 5
+    }
+  ],
+  "profile_id": "xrechnung-ubl-3.0.2-2026-01-31",
+  "schema": "https://rechnungsprobe.dev/schemas/research-results-v1",
+  "status": "passed"
+}

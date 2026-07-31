@@ -72,6 +72,30 @@ def test_local_target_resolves_and_hashes_existing_relative_file_arguments(
     assert result.process.stdout.strip() == hashlib.sha256(invoice).hexdigest().encode()
 
 
+def test_local_target_executes_staged_script_bytes_after_source_substitution(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    importer = tmp_path / "importer.py"
+    importer.write_text("print('APPROVED')\n", encoding="utf-8")
+    actual_runner = target_module.run_bounded_process
+
+    def substitute_then_run(*args: object, **kwargs: object) -> ProcessResult:
+        importer.write_text("print('SUBSTITUTED')\n", encoding="utf-8")
+        return actual_runner(*args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(target_module, "run_bounded_process", substitute_then_run)
+
+    result = run_local_target(
+        LocalTarget(command=(sys.executable, str(importer)), input_mode="stdin"),
+        b"<Invoice/>",
+        workspace=tmp_path / "work",
+        policy=ProcessPolicy(),
+    )
+
+    assert result.process.stdout.strip() == b"APPROVED"
+
+
 def test_local_file_target_gets_fixed_non_interpolated_path(tmp_path: Path) -> None:
     target = LocalTarget(
         command=(
@@ -206,6 +230,8 @@ def test_container_target_requires_digest_and_strict_isolation(tmp_path: Path) -
     assert "--memory-swap=268435456" in command
     assert "--cpus=1.0" in command
     assert "--pull=never" in command
+    assert any(value.startswith("--cidfile=") for value in command)
+    assert any(value.startswith("--label=rechnungsprobe.run=") for value in command)
     assert target.image in command
     assert os.fspath(tmp_path.absolute()) in " ".join(command)
 
@@ -237,12 +263,37 @@ def test_container_target_accepts_a_digest_pinned_registry_port(tmp_path: Path) 
     assert target.image in command
 
 
+def test_container_target_accepts_a_content_addressed_local_image_id(
+    tmp_path: Path,
+) -> None:
+    target = ContainerTarget(
+        image="sha256:" + "f" * 64,
+        command=("import",),
+        input_mode="stdin",
+    )
+
+    command = build_docker_command(
+        target,
+        workspace=tmp_path,
+        policy=ProcessPolicy(),
+    )
+
+    assert target.image in command
+
+
 @pytest.mark.skipif(os.name == "nt", reason="POSIX mode bits are not enforced on Windows")
 def test_container_output_directory_is_writable_by_the_unprivileged_user(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def completed_process(*_args: object, **_kwargs: object) -> ProcessResult:
+    def completed_process(command: object, **_kwargs: object) -> ProcessResult:
+        if tuple(command)[1:2] == ("inspect",):  # type: ignore[arg-type]
+            return ProcessResult(
+                termination="exited",
+                returncode=1,
+                stdout=b"",
+                stderr=b"not found",
+            )
         return ProcessResult(
             termination="exited",
             returncode=0,
@@ -290,3 +341,42 @@ def test_container_target_digest_covers_command_and_io_configuration() -> None:
     assert digest.startswith("sha256:")
     assert len(digest) == 71
     assert all(target_module.target_configuration_digest(variant) != digest for variant in variants)
+
+
+def test_container_target_cleans_up_the_daemon_owned_container_after_timeout(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    commands: list[tuple[str, ...]] = []
+
+    def bounded(
+        command: object,
+        **_kwargs: object,
+    ) -> ProcessResult:
+        arguments = tuple(command)  # type: ignore[arg-type]
+        commands.append(arguments)
+        if arguments[1:2] == ("run",):
+            cid_argument = next(value for value in arguments if value.startswith("--cidfile="))
+            Path(cid_argument.split("=", 1)[1]).write_text("a" * 64, encoding="ascii")
+            return ProcessResult("timeout", None, b"", b"")
+        if arguments[1:2] == ("inspect",):
+            return ProcessResult("exited", 1, b"", b"not found")
+        return ProcessResult("exited", 0, b"", b"")
+
+    monkeypatch.setattr(target_module, "run_bounded_process", bounded)
+
+    result = target_module.run_container_target(
+        ContainerTarget(
+            image="example/importer@sha256:" + "b" * 64,
+            command=("import",),
+            input_mode="stdin",
+        ),
+        b"<Invoice/>",
+        workspace=tmp_path / "work",
+        policy=ProcessPolicy(timeout_seconds=1),
+    )
+
+    assert result.process.termination == "timeout"
+    assert ("docker", "kill", "a" * 64) in commands
+    assert ("docker", "rm", "-f", "a" * 64) in commands
+    assert ("docker", "inspect", "a" * 64) in commands

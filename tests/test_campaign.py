@@ -23,6 +23,7 @@ def test_campaign_revalidates_shrinks_verifies_and_reproduces_a_finding(
     tmp_path: Path,
 ) -> None:
     validated: set[bytes] = set()
+    validation_counts: dict[bytes, int] = {}
     executed: list[bytes] = []
 
     def validator(
@@ -33,6 +34,7 @@ def test_campaign_revalidates_shrinks_verifies_and_reproduces_a_finding(
         for case_id, invoice_xml in cases.items():
             parse_invoice(invoice_xml)
             validated.add(invoice_xml)
+            validation_counts[invoice_xml] = validation_counts.get(invoice_xml, 0) + 1
             results[case_id] = ValidationResult(
                 valid=True,
                 profile_id=XRECHNUNG_UBL_3_0_2.identifier,
@@ -80,11 +82,27 @@ def test_campaign_revalidates_shrinks_verifies_and_reproduces_a_finding(
     assert finding["one_minimal"] is True
     assert finding["reproductions"] == 3
     assert finding["synthetic"] is True
+    provenance = finding["provenance"]
+    assert provenance["campaign_seed"] == 7
+    assert len(provenance["seed_sha256"]) == 64
+    assert len(provenance["seed_fingerprint"]) == 64
+    assert provenance["profile"]["identifier"] == XRECHNUNG_UBL_3_0_2.identifier
+    assert (
+        provenance["profile"]["validator_sha256"]
+        == XRECHNUNG_UBL_3_0_2.validator_sha256
+    )
+    assert provenance["target_digest"] == "sha256:" + "b" * 64
+    assert provenance["resource_policy"]["timeout_milliseconds"] == 10_000
+    assert len(provenance["observations"]) == 3
+    assert provenance["minimization"]["algorithm"] == "greedy-1-minimal-v1"
+    assert provenance["minimization"]["one_minimal"] is True
+    assert provenance["minimization"]["verification_attempts"] >= 1
     capsule = tmp_path / "campaign" / "case-000000.rechnungsprobe"
     verified = verify_finding_capsule(capsule)
     assert verified.record == finding_record_from_payload(finding)
     assert b"RP-" in verified.invoice_xml
     assert len(executed) >= 4
+    assert max(validation_counts.values()) <= 2
 
 
 def test_campaign_officially_validates_roundtrip_output_before_matching(

@@ -1,0 +1,21 @@
+{
+  "$id": "https://rechnungsprobe.dev/schemas/corpus-gate-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "campaign_seed": {"minimum": 0, "type": "integer"},
+    "corpus_root_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"},
+    "environment": {"additionalProperties": false, "properties": {"java": {"type": "string"}, "operating_system": {"type": "string"}, "python": {"type": "string"}}, "required": ["java", "operating_system", "python"], "type": "object"},
+    "generator_version": {"type": "string"},
+    "interaction_buckets_covered": {"items": {"type": "string"}, "type": "array"},
+    "mutators_covered": {"items": {"type": "string"}, "type": "array"},
+    "profile": {"additionalProperties": false, "properties": {"configuration_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "configuration_version": {"type": "string"}, "identifier": {"type": "string"}, "validator_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "validator_version": {"type": "string"}}, "required": ["configuration_sha256", "configuration_version", "identifier", "validator_sha256", "validator_version"], "type": "object"},
+    "schema": {"const": "https://rechnungsprobe.dev/schemas/corpus-gate-v1"},
+    "status": {"const": "passed"},
+    "unique_semantic_fingerprints": {"minimum": 1, "type": "integer"},
+    "validated_count": {"minimum": 1, "type": "integer"},
+    "validation_root_sha256": {"pattern": "^sha256:[0-9a-f]{64}$", "type": "string"}
+  },
+  "required": ["campaign_seed", "corpus_root_sha256", "environment", "generator_version", "interaction_buckets_covered", "mutators_covered", "profile", "schema", "status", "unique_semantic_fingerprints", "validated_count", "validation_root_sha256"],
+  "type": "object"
+}

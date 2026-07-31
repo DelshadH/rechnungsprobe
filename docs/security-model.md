@@ -22,7 +22,12 @@ untrusted.
   regular file below the target workspace, with no linked path components.
 - Local target temporary-directory variables point into the disposable
   workspace. Existing executable/script arguments are resolved and hashed before
-  the target changes directory.
+  the target changes directory and regular-file arguments are copied and
+  rehashed inside the workspace before execution.
+- Windows targets use a kill-on-close Job Object and POSIX targets use a process
+  group. Descendants are terminated even when the leader exits first.
+- Docker runs use a cidfile and ownership label. Cleanup kills and removes any
+  daemon-owned container and verifies that it no longer exists.
 - Finding capsules use a fixed member set and order, canonical contents, hashes,
   bounded parsing, and deterministic ZIP metadata.
 
@@ -53,11 +58,16 @@ before Java starts. The Java runtime and operating system are trusted.
 
 `verify` establishes capsule integrity and internal consistency; it does not
 execute Java or the importer. `replay` performs official profile revalidation
-before executing the recorded target. Capsules whose replay resource policies
-exceed fixed safety caps are rejected, and local-process replay requires an
-explicit `--allow-local-target` opt-in because a capsule can name any host
-executable. The target digest covers executable or image content/identity plus
-the argument vector and I/O configuration, and is checked before execution.
+before executing an authorized target. Capsules whose replay resource policies
+exceed fixed safety caps are rejected. A capsule local command has no default
+authority: the current user must supply `--replacement-command` or the
+conspicuous `--unsafe-use-capsule-local-command` opt-in. The target digest covers
+executable or image content/identity plus the argument vector and I/O
+configuration.
+
+Local target identity is best-effort provenance, not host attestation. The
+executable and dynamically loaded libraries remain part of the trusted host
+boundary. Publication-grade evidence uses a content-addressed container.
 
 ## Trust statement
 

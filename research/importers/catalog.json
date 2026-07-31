@@ -1,0 +1,53 @@
+{
+  "as_of": "2026-07-26",
+  "build_command": "docker build --provenance=false --pull=false",
+  "importers": [
+    {
+      "adapter": "jasy",
+      "image": "sha256:6d50b697bf35ded67d8f41d2bce1a105a454da09f001834e748b69f606c15171",
+      "license": "MIT",
+      "repository": "https://github.com/jasy-pdf/jasy",
+      "selection_commit": "41b3b866ee297a25f65be7d30086d078e171dbe5",
+      "version": "@jasy/cli@1.0.0-alpha.6",
+      "version_integrity": "sha512-dkp+dBA+kUJLJpIz1/GknWWLsKlDUIqKzxlTwHqW6an0nl7QaOb7i89JiYh9lYiuqsyuxSvciaeuRccW8xAvWw=="
+    },
+    {
+      "adapter": "esvit",
+      "image": "sha256:b95497c49b23e672a8c8099bda07244dd64f0291fc25b41ca2e8c877c6310ef2",
+      "license": "MIT",
+      "repository": "https://github.com/esvit/einvoicing",
+      "runtime_commit": "ff527f675162d9b6d70bd23f2788f716e62017c1",
+      "selection_commit": "3f0bab9b56839059498decbc906fa19002e3cf73",
+      "version": "einvoicing@0.0.3",
+      "version_integrity": "sha512-+6ndEVqVFMtYq0EoiXnmQWS3j5vAP13SeJ8nhriMpEgq3aeSaZSSstgAEtNftCVQp802xMXyZ5MAkiu7kwx3HQ=="
+    },
+    {
+      "adapter": "numnum",
+      "image": "sha256:595df2e164318e79cea7367f274d1037f03a2a595cf3e04a0ed9cc31d9440de7",
+      "license": "MIT",
+      "repository": "https://github.com/num-num/ubl-invoice",
+      "runtime_commit": "30fc1d9a1a8bd347630052addd6405942a1f0103",
+      "selection_commit": "af6cec61c8cc8c8a0ea15a1484c4b5cbb92adfc1",
+      "version": "num-num/ubl-invoice@2.4.1"
+    },
+    {
+      "adapter": "josemmo",
+      "image": "sha256:15e7fee1c60e41e878a67a1f1638c7617d4f6929fd20c4e10340aa19a30f20db",
+      "license": "MIT",
+      "repository": "https://github.com/josemmo/einvoicing",
+      "runtime_commit": "6e042d17a0722c698cc40c83a4dd0c70b1bfd73c",
+      "selection_commit": "6e042d17a0722c698cc40c83a4dd0c70b1bfd73c",
+      "version": "josemmo/einvoicing@0.3.1"
+    },
+    {
+      "adapter": "ph-ubl",
+      "image": "sha256:9cb34b539e764ad35653e6bc3dd988cecac3aa44faec1a35a907f3a3693de778",
+      "license": "Apache-2.0",
+      "repository": "https://github.com/phax/ph-ubl",
+      "runtime_commit": "66ab9fcd303dba754a56f356e16e147d163b1794",
+      "selection_commit": "4accf7557d71b2777fa0c7a783ce905306750774",
+      "version": "com.helger.ubl:ph-ubl21:9.0.3"
+    }
+  ],
+  "schema": "https://rechnungsprobe.dev/schemas/importer-catalog-v1"
+}

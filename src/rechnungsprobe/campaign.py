@@ -16,6 +16,14 @@ from rechnungsprobe.predicates import (
 )
 from rechnungsprobe.process import ProcessPolicy
 from rechnungsprobe.profiles import XRECHNUNG_UBL_3_0_2, bundled_seed_path
+from rechnungsprobe.provenance import (
+    FindingProvenance,
+    MinimizationProof,
+    Observation,
+    observation_from_result,
+    profile_payload,
+    resource_policy_payload,
+)
 from rechnungsprobe.replay import ReplayPredicate, ReplaySpecification
 from rechnungsprobe.reporting import FindingRecord, finding_json, finding_junit
 from rechnungsprobe.security import SecurityError
@@ -196,6 +204,7 @@ def _finding_record(
     one_minimal: bool,
     reproductions: int,
     synthetic: bool,
+    provenance: FindingProvenance,
 ) -> FindingRecord:
     return FindingRecord(
         case_id=f"case-{candidate.index:06d}",
@@ -214,6 +223,7 @@ def _finding_record(
         one_minimal=one_minimal,
         reproductions=reproductions,
         synthetic=synthetic,
+        provenance=provenance,
     )
 
 
@@ -262,6 +272,10 @@ def run_campaign(
             validator=validator,
             workspaces=workspaces,
         )
+        validity_cache = {
+            hashlib.sha256(candidate.xml).hexdigest(): True for candidate in candidates
+        }
+        validity_cache[hashlib.sha256(load_xml(bundled_seed_path()).data).hexdigest()] = True
         _write_new(output_root / "corpus.json", corpus_manifest(candidates))
         for candidate in candidates:
             _write_new(corpus_root / f"case-{candidate.index:06d}.xml", candidate.xml)
@@ -281,10 +295,38 @@ def run_campaign(
             target_digest = initial_result.target_digest
 
             def is_valid(invoice_xml: bytes) -> bool:
-                return _valid(
+                digest = hashlib.sha256(invoice_xml).hexdigest()
+                if digest in validity_cache:
+                    return validity_cache[digest]
+                valid = _valid(
                     invoice_xml,
                     validator=validator,
                     workspaces=workspaces,
+                )
+                validity_cache[digest] = valid
+                return valid
+
+            def validate_batch(invoice_documents: tuple[bytes, ...]) -> tuple[bool, ...]:
+                missing: dict[str, bytes] = {}
+                for invoice_xml in invoice_documents:
+                    digest = hashlib.sha256(invoice_xml).hexdigest()
+                    if digest not in validity_cache:
+                        missing[digest] = invoice_xml
+                missing_items = tuple(missing.items())
+                for offset in range(0, len(missing_items), 64):
+                    batch = missing_items[offset : offset + 64]
+                    cases = {
+                        f"candidate-{index:04d}": invoice_xml
+                        for index, (_digest, invoice_xml) in enumerate(batch)
+                    }
+                    results = validator(cases, workspaces.next_validation())
+                    if set(results) != set(cases):
+                        raise SecurityError("validator returned an unexpected result set")
+                    for index, (digest, _invoice_xml) in enumerate(batch):
+                        validity_cache[digest] = results[f"candidate-{index:04d}"].valid
+                return tuple(
+                    validity_cache[hashlib.sha256(invoice_xml).hexdigest()]
+                    for invoice_xml in invoice_documents
                 )
 
             def preserves_finding(
@@ -308,11 +350,13 @@ def run_campaign(
                 parse_invoice(candidate.xml),
                 is_valid=is_valid,
                 preserves_finding=preserves_finding,
+                validate_batch=validate_batch,
             )
             minimality = verify_one_minimal(
                 shrunk.invoice,
                 is_valid=is_valid,
                 preserves_finding=preserves_finding,
+                validate_batch=validate_batch,
             )
             if not minimality.minimal:
                 raise SecurityError("independent 1-minimality verification failed")
@@ -320,6 +364,7 @@ def run_campaign(
             reduced_xml = serialize_invoice(shrunk.invoice)
             final_result: TargetResult | None = None
             final_evaluation: PredicateEvaluation | None = None
+            observations: list[Observation] = []
             for _ in range(reproductions):
                 if not is_valid(reduced_xml):
                     raise SecurityError("reduced invoice failed reproduction validation")
@@ -336,6 +381,7 @@ def run_campaign(
                     raise SecurityError("target digest changed during reproduction")
                 if not final_evaluation.matched:
                     raise SecurityError("finding did not reproduce consistently")
+                observations.append(observation_from_result(final_result))
             if final_result is None or final_evaluation is None:
                 raise RuntimeError("reproduction loop produced no target result")
             record = _finding_record(
@@ -347,6 +393,23 @@ def run_campaign(
                 one_minimal=minimality.minimal,
                 reproductions=reproductions,
                 synthetic=synthetic,
+                provenance=FindingProvenance(
+                    campaign_seed=candidate.campaign_seed,
+                    seed_sha256=candidate.seed_sha256,
+                    seed_fingerprint=candidate.seed_fingerprint,
+                    profile=profile_payload(XRECHNUNG_UBL_3_0_2),
+                    target_digest=target_digest,
+                    resource_policy=resource_policy_payload(process_policy),
+                    observations=tuple(observations),
+                    minimization=MinimizationProof(
+                        algorithm="greedy-1-minimal-v1",
+                        declared_operations="invoice-node-value-v1",
+                        attempts=shrunk.attempts,
+                        accepted_operations=shrunk.accepted,
+                        one_minimal=minimality.minimal,
+                        verification_attempts=minimality.attempts,
+                    ),
+                ),
             )
             create_finding_capsule(
                 output_root / f"{record.case_id}.rechnungsprobe",
