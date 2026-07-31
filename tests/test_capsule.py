@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,13 @@ from rechnungsprobe.model import parse_invoice, semantic_fingerprint, serialize_
 from rechnungsprobe.predicates import CrashPredicate
 from rechnungsprobe.process import ProcessPolicy
 from rechnungsprobe.profiles import XRECHNUNG_UBL_3_0_2, bundled_seed_path
+from rechnungsprobe.provenance import (
+    FindingProvenance,
+    MinimizationProof,
+    Observation,
+    profile_payload,
+    resource_policy_payload,
+)
 from rechnungsprobe.replay import ReplaySpecification
 from rechnungsprobe.reporting import FindingRecord
 from rechnungsprobe.security import SecurityError
@@ -165,6 +173,54 @@ def test_capsule_rejects_a_container_configuration_digest_mismatch(
         create_finding_capsule(
             tmp_path / "finding.rechnungsprobe",
             record=_record(invoice),
+            invoice_xml=invoice,
+            replay=replay,
+        )
+
+
+def test_real_finding_record_requires_provenance() -> None:
+    invoice = serialize_invoice(parse_invoice(bundled_seed_path()))
+
+    with pytest.raises(SecurityError, match="provenance"):
+        replace(_record(invoice), synthetic=False)
+
+
+def test_capsule_rejects_provenance_that_disagrees_with_replay_policy(
+    tmp_path: Path,
+) -> None:
+    invoice = serialize_invoice(parse_invoice(bundled_seed_path()))
+    baseline = _record(invoice)
+    observation = Observation(
+        termination="exited",
+        returncode=23,
+        stdout_sha256="0" * 64,
+        stderr_sha256="0" * 64,
+        output_sha256=None,
+    )
+    provenance = FindingProvenance(
+        campaign_seed=1,
+        seed_sha256="1" * 64,
+        seed_fingerprint="2" * 64,
+        profile=profile_payload(XRECHNUNG_UBL_3_0_2),
+        target_digest=baseline.target_digest,
+        resource_policy=resource_policy_payload(ProcessPolicy()),
+        observations=(observation,) * baseline.reproductions,
+        minimization=MinimizationProof(
+            algorithm="greedy-1-minimal-v1",
+            declared_operations="invoice-node-value-v1",
+            attempts=1,
+            accepted_operations=(),
+            one_minimal=True,
+            verification_attempts=1,
+        ),
+    )
+    record = replace(baseline, synthetic=False, provenance=provenance)
+    replay = replace(_replay(), policy=ProcessPolicy(timeout_seconds=9))
+
+    with pytest.raises(SecurityError, match="provenance"):
+        create_finding_capsule(
+            tmp_path / "finding.rechnungsprobe",
+            record=record,
             invoice_xml=invoice,
             replay=replay,
         )

@@ -1,6 +1,6 @@
 # Research record
 
-Last repeated: **24 July 2026**. This is a dated feasibility check, not proof
+Last repeated: **26 July 2026**. This is a dated feasibility check, not proof
 that no similar project or mark exists.
 
 ## Collision check
@@ -70,23 +70,19 @@ the upstream license texts under `third_party/`; generated or copied seed data
 records its source tag and digest. This is a practical redistribution finding,
 not legal advice.
 
-## Importer harness feasibility
+## Importer campaign
 
-Six active projects were inspected at current default-branch revisions:
+Five active UBL readers were selected with practical adapters: Jasy,
+esvit/einvoicing, num-num/ubl-invoice, josemmo/einvoicing, and ph-ubl. Exact
+selection and runtime commits, package integrity values, licenses, lockfiles,
+base-image digests, and research image IDs are recorded in
+`research/importers/catalog.json`.
 
-- [Mustangproject](https://github.com/ZUGFeRD/mustangproject), Apache-2.0:
-  Java `XRechnungImporter` API and CLI make a small pinned harness practical.
-- [ph-ubl](https://github.com/phax/ph-ubl), Apache-2.0: its UBL 2.1 marshaller
-  provides a second small parse/round-trip harness.
-- [OpenXRechnungToolbox](https://github.com/jcthiele/OpenXRechnungToolbox),
-  GPL-3.0: useful GUI/viewer prior art; headless harnessing needs more work.
-- [OCA/edi](https://github.com/OCA/edi), AGPL-3.0: real Odoo UBL invoice import,
-  but its service/database setup makes it a later heavyweight target.
-- [factur-x](https://github.com/akretion/factur-x): active Python parsing and
-  validation, focused on Factur-X/CII rather than the first UBL profile.
-- [horstoeko/zugferd](https://github.com/horstoeko/zugferd), MIT: active PHP
-  reader, also CII-focused.
-
-The first repeatable real harnesses therefore target Mustangproject and ph-ubl.
-No third-party failure is documented publicly until reproduction, scope review,
-and responsible disclosure are complete.
+The official-validation campaign locally retained three private compatibility
+observations across three importers: two crashes and one invalid
+round-trip/preservation loss. The private records report that each final source
+invoice is valid, each observation reproduced five times, and each is 1-minimal
+under `invoice-node-value-v1`. The public repository contains commitments but
+not the capsules or target mapping needed for independent reproduction. Those
+remain private until a reasonable maintainer notification path is completed. See
+[benchmark.md](benchmark.md) for scope and limitations.

@@ -6,6 +6,7 @@ import sys
 import time
 from pathlib import Path
 
+import psutil
 import pytest
 
 from rechnungsprobe.process import ProcessPolicy, run_bounded_process
@@ -144,6 +145,23 @@ def test_bounded_process_rejects_shell_command_strings(tmp_path: Path) -> None:
         )
 
 
+def test_bounded_process_fails_closed_when_workspace_scan_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def denied(_path: object) -> object:
+        raise PermissionError("synthetic traversal denial")
+
+    monkeypatch.setattr("rechnungsprobe.process.os.scandir", denied)
+
+    with pytest.raises(SecurityError, match="inspected safely"):
+        run_bounded_process(
+            (sys.executable, "-c", "pass"),
+            cwd=tmp_path,
+            policy=ProcessPolicy(),
+        )
+
+
 @pytest.mark.skipif(not hasattr(os, "symlink"), reason="symlinks are unavailable")
 def test_bounded_process_rejects_symlink_working_directory(tmp_path: Path) -> None:
     real = tmp_path / "real"
@@ -160,3 +178,66 @@ def test_bounded_process_rejects_symlink_working_directory(tmp_path: Path) -> No
             cwd=link,
             policy=ProcessPolicy(),
         )
+
+
+def test_bounded_process_kills_descendants_after_the_parent_exits(tmp_path: Path) -> None:
+    pid_file = tmp_path / "child.pid"
+    child_code = (
+        "import os,pathlib,sys,time; "
+        "pathlib.Path(sys.argv[1]).write_text(str(os.getpid())); "
+        "time.sleep(30)"
+    )
+    parent_code = (
+        "import pathlib,subprocess,sys,time; "
+        "subprocess.Popen([sys.executable,'-c',sys.argv[1],sys.argv[2]],"
+        "stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,"
+        "close_fds=True); "
+        "p=pathlib.Path(sys.argv[2]); deadline=time.monotonic()+5; "
+        "\nwhile not p.exists() and time.monotonic()<deadline: time.sleep(0.01)"
+    )
+
+    result = run_bounded_process(
+        (sys.executable, "-c", parent_code, child_code, str(pid_file)),
+        cwd=tmp_path,
+        policy=ProcessPolicy(timeout_seconds=8, cpu_seconds=6),
+    )
+
+    assert result.termination == "exited"
+    child_pid = int(pid_file.read_text())
+    child: psutil.Process | None = None
+    try:
+        try:
+            child = psutil.Process(child_pid)
+        except psutil.NoSuchProcess:
+            # The process can disappear between pid_exists/Process on POSIX.
+            pass
+        if child is not None:
+            child.wait(timeout=2)
+            assert not child.is_running()
+    finally:
+        try:
+            if child is not None and child.is_running():
+                child.kill()
+        except psutil.NoSuchProcess:
+            pass
+
+
+@pytest.mark.skipif(os.name != "nt", reason="NTFS junction behavior is Windows-specific")
+def test_bounded_process_rejects_a_created_junction(tmp_path: Path) -> None:
+    outside = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside.mkdir()
+    junction = tmp_path / "escape"
+    code = (
+        "import subprocess,sys,time; "
+        "result=subprocess.run(['cmd','/c','mklink','/J',sys.argv[1],sys.argv[2]],"
+        "stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); "
+        "raise SystemExit(result.returncode) if result.returncode else time.sleep(30)"
+    )
+
+    result = run_bounded_process(
+        (sys.executable, "-c", code, str(junction), str(outside)),
+        cwd=tmp_path,
+        policy=ProcessPolicy(timeout_seconds=5, cpu_seconds=4),
+    )
+
+    assert result.termination == "file_limit"

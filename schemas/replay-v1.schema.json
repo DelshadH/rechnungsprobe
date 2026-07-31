@@ -1,0 +1,39 @@
+{
+  "$id": "https://rechnungsprobe.dev/schemas/replay-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "policy": {
+      "additionalProperties": false,
+      "properties": {
+        "cpu_milliseconds": {"maximum": 120000, "minimum": 1, "type": "integer"},
+        "max_created_files": {"maximum": 1024, "minimum": 0, "type": "integer"},
+        "max_file_growth_bytes": {"maximum": 67108864, "minimum": 0, "type": "integer"},
+        "max_input_bytes": {"maximum": 2097152, "minimum": 1, "type": "integer"},
+        "max_memory_bytes": {"maximum": 1073741824, "minimum": 1, "type": "integer"},
+        "max_output_bytes": {"maximum": 16777216, "minimum": 0, "type": "integer"},
+        "max_processes": {"maximum": 32, "minimum": 1, "type": "integer"},
+        "poll_milliseconds": {"maximum": 1000, "minimum": 1, "type": "integer"},
+        "timeout_milliseconds": {"maximum": 120000, "minimum": 1, "type": "integer"}
+      },
+      "required": ["cpu_milliseconds", "max_created_files", "max_file_growth_bytes", "max_input_bytes", "max_memory_bytes", "max_output_bytes", "max_processes", "poll_milliseconds", "timeout_milliseconds"],
+      "type": "object"
+    },
+    "predicate": {
+      "oneOf": [
+        {"additionalProperties": false, "properties": {"kind": {"enum": ["crash-or-nonzero", "timeout", "output-invalid"]}}, "required": ["kind"], "type": "object"},
+        {"additionalProperties": false, "properties": {"expected": {"type": ["string", "integer", "boolean", "null"]}, "kind": {"const": "stdout-json"}, "pointer": {"type": "string"}}, "required": ["expected", "kind", "pointer"], "type": "object"},
+        {"additionalProperties": false, "properties": {"fields": {"items": {"type": "string"}, "type": "array"}, "kind": {"const": "declared-field-loss"}}, "required": ["fields", "kind"], "type": "object"}
+      ]
+    },
+    "schema": {"const": "https://rechnungsprobe.dev/schemas/replay-v1"},
+    "target": {
+      "oneOf": [
+        {"additionalProperties": false, "properties": {"command": {"items": {"type": "string"}, "maxItems": 128, "minItems": 1, "type": "array"}, "input_mode": {"enum": ["stdin", "file"]}, "kind": {"const": "local"}, "output_file": {"type": ["string", "null"]}}, "required": ["command", "input_mode", "kind", "output_file"], "type": "object"},
+        {"additionalProperties": false, "properties": {"command": {"items": {"type": "string"}, "maxItems": 128, "minItems": 1, "type": "array"}, "image": {"pattern": "^(sha256:[0-9a-f]{64}|[a-z0-9][a-z0-9._/:-]*@sha256:[0-9a-f]{64})$", "type": "string"}, "input_mode": {"enum": ["stdin", "file"]}, "kind": {"const": "container"}, "output_file": {"type": ["string", "null"]}}, "required": ["command", "image", "input_mode", "kind", "output_file"], "type": "object"}
+      ]
+    }
+  },
+  "required": ["policy", "predicate", "schema", "target"],
+  "type": "object"
+}

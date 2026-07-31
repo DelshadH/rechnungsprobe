@@ -15,6 +15,7 @@ from rechnungsprobe.model import (
 )
 
 ValidityCheck = Callable[[bytes], bool]
+BatchValidityCheck = Callable[[tuple[bytes, ...]], tuple[bool, ...]]
 FindingCheck = Callable[[bytes], bool]
 PartyName = Literal["seller", "buyer"]
 PartyOptionalField = Literal[
@@ -359,6 +360,7 @@ def shrink_invoice(
     *,
     is_valid: ValidityCheck,
     preserves_finding: FindingCheck,
+    validate_batch: BatchValidityCheck | None = None,
 ) -> ShrinkResult:
     """Greedily reach a deterministic 1-minimal invoice."""
 
@@ -373,13 +375,23 @@ def shrink_invoice(
     checked = {initial_xml}
     while True:
         changed = False
+        pending: list[tuple[Reduction, bytes]] = []
         for reduction in one_step_reductions(current):
             candidate_xml = serialize_invoice(reduction.invoice)
             if candidate_xml in checked:
                 continue
             checked.add(candidate_xml)
             attempts += 1
-            if not is_valid(candidate_xml):
+            pending.append((reduction, candidate_xml))
+        validities = (
+            validate_batch(tuple(candidate for _reduction, candidate in pending))
+            if validate_batch is not None and pending
+            else tuple(is_valid(candidate) for _reduction, candidate in pending)
+        )
+        if len(validities) != len(pending):
+            raise ValueError("batch validity check returned an unexpected result count")
+        for (reduction, candidate_xml), valid in zip(pending, validities, strict=True):
+            if not valid:
                 continue
             if not preserves_finding(candidate_xml):
                 continue
@@ -402,6 +414,7 @@ def verify_one_minimal(
     *,
     is_valid: ValidityCheck,
     preserves_finding: FindingCheck,
+    validate_batch: BatchValidityCheck | None = None,
 ) -> MinimalityResult:
     """Independently rerun every declared one-step reduction."""
 
@@ -411,10 +424,20 @@ def verify_one_minimal(
         preserves_finding=preserves_finding,
     )
     attempts = 1
-    for reduction in one_step_reductions(invoice):
+    candidates = tuple(
+        (reduction, serialize_invoice(reduction.invoice))
+        for reduction in one_step_reductions(invoice)
+    )
+    validities = (
+        validate_batch(tuple(candidate for _reduction, candidate in candidates))
+        if validate_batch is not None and candidates
+        else tuple(is_valid(candidate) for _reduction, candidate in candidates)
+    )
+    if len(validities) != len(candidates):
+        raise ValueError("batch validity check returned an unexpected result count")
+    for (reduction, candidate_xml), valid in zip(candidates, validities, strict=True):
         attempts += 1
-        candidate_xml = serialize_invoice(reduction.invoice)
-        if is_valid(candidate_xml) and preserves_finding(candidate_xml):
+        if valid and preserves_finding(candidate_xml):
             return MinimalityResult(
                 minimal=False,
                 attempts=attempts,

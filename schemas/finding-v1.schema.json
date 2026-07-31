@@ -1,0 +1,97 @@
+{
+  "$id": "https://rechnungsprobe.dev/schemas/finding-v1",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "findings": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "case_id": {"maxLength": 80, "minLength": 1, "type": "string"},
+          "details": {"items": {"maxLength": 2000, "minLength": 1, "type": "string"}, "maxItems": 64, "type": "array"},
+          "evidence_class": {"enum": ["real", "synthetic"]},
+          "finding_kind": {"enum": ["valid-invoice-rejected", "accepted-but-parsed-incorrectly", "field-lost-or-altered", "totals-or-tax-changed", "optional-valid-construct-mishandled", "crash", "timeout-or-resource-exhaustion", "nondeterminism", "round-trip-loss"]},
+          "fingerprint": {"$ref": "#/$defs/hash"},
+          "invoice_sha256": {"$ref": "#/$defs/hash"},
+          "mutations": {"items": {"maxLength": 2000, "minLength": 1, "type": "string"}, "maxItems": 64, "type": "array"},
+          "one_minimal": {"type": "boolean"},
+          "predicate": {"maxLength": 2000, "minLength": 1, "type": "string"},
+          "profile_id": {"maxLength": 2000, "minLength": 1, "type": "string"},
+          "provenance": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/provenance"}]},
+          "reproductions": {"maximum": 100, "minimum": 1, "type": "integer"},
+          "returncode": {"type": ["integer", "null"]},
+          "synthetic": {"type": "boolean"},
+          "target_digest": {"$ref": "#/$defs/hash"},
+          "termination": {"enum": ["exited", "timeout", "output_limit", "memory_limit", "cpu_limit", "process_limit", "file_limit"]}
+        },
+        "required": ["case_id", "details", "evidence_class", "finding_kind", "fingerprint", "invoice_sha256", "mutations", "one_minimal", "predicate", "profile_id", "provenance", "reproductions", "returncode", "synthetic", "target_digest", "termination"],
+        "type": "object"
+      },
+      "type": "array"
+    },
+    "schema": {"const": "https://rechnungsprobe.dev/schemas/finding-v1"}
+  },
+  "required": ["findings", "schema"],
+  "type": "object",
+  "$defs": {
+    "hash": {"pattern": "^(sha256:)?[0-9a-f]{64}$", "type": "string"},
+    "profile": {
+      "additionalProperties": false,
+      "properties": {
+        "configuration_sha256": {"$ref": "#/$defs/hash"},
+        "configuration_version": {"type": "string"},
+        "identifier": {"type": "string"},
+        "validator_sha256": {"$ref": "#/$defs/hash"},
+        "validator_version": {"type": "string"}
+      },
+      "required": ["configuration_sha256", "configuration_version", "identifier", "validator_sha256", "validator_version"],
+      "type": "object"
+    },
+    "provenance": {
+      "additionalProperties": false,
+      "properties": {
+        "campaign_seed": {"minimum": 0, "type": "integer"},
+        "minimization": {
+          "additionalProperties": false,
+          "properties": {
+            "accepted_operations": {"items": {"type": "string"}, "type": "array"},
+            "algorithm": {"const": "greedy-1-minimal-v1"},
+            "attempts": {"minimum": 1, "type": "integer"},
+            "declared_operations": {"const": "invoice-node-value-v1"},
+            "one_minimal": {"type": "boolean"},
+            "verification_attempts": {"minimum": 1, "type": "integer"}
+          },
+          "required": ["accepted_operations", "algorithm", "attempts", "declared_operations", "one_minimal", "verification_attempts"],
+          "type": "object"
+        },
+        "observations": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "output_sha256": {"anyOf": [{"type": "null"}, {"$ref": "#/$defs/hash"}]},
+              "returncode": {"type": ["integer", "null"]},
+              "stderr_sha256": {"$ref": "#/$defs/hash"},
+              "stdout_sha256": {"$ref": "#/$defs/hash"},
+              "termination": {"type": "string"}
+            },
+            "required": ["output_sha256", "returncode", "stderr_sha256", "stdout_sha256", "termination"],
+            "type": "object"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "profile": {"$ref": "#/$defs/profile"},
+        "resource_policy": {
+          "additionalProperties": false,
+          "patternProperties": {"^[a-z_]+$": {"minimum": 0, "type": "integer"}},
+          "type": "object"
+        },
+        "seed_fingerprint": {"$ref": "#/$defs/hash"},
+        "seed_sha256": {"$ref": "#/$defs/hash"},
+        "target_digest": {"$ref": "#/$defs/hash"}
+      },
+      "required": ["campaign_seed", "minimization", "observations", "profile", "resource_policy", "seed_fingerprint", "seed_sha256", "target_digest"],
+      "type": "object"
+    }
+  }
+}

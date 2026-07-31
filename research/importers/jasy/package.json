@@ -1,0 +1,7 @@
+{
+  "name": "rechnungsprobe-jasy-adapter",
+  "private": true,
+  "dependencies": {
+    "@jasy/cli": "1.0.0-alpha.6"
+  }
+}

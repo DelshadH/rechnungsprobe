@@ -2,95 +2,150 @@
 
 **Your invoice is valid. Is your importer?**
 
-Rechnungsprobe is a pre-release command-line compatibility tester for German
-e-invoice software. It starts with an XRechnung UBL seed, applies deterministic
-semantic mutations, validates every candidate with pinned official KoSIT
-artifacts, sends valid candidates to a black-box importer, and reduces a matching
-failure to a still-valid 1-minimal reproduction under its declared operations.
+Rechnungsprobe is a command-line compatibility tester for XRechnung UBL
+importers. It creates deterministic semantic variants, validates every candidate
+with pinned official KoSIT artifacts, runs a declared importer, and reduces a
+matching failure to a still-valid 1-minimal reproduction under declared
+operations.
 
-A validator asks whether an invoice follows a profile. Rechnungsprobe asks
-whether receiving software accepts and preserves the valid invoices it may
-encounter.
-
-> **Status:** the end-to-end vertical slice is implemented, but this is still
-> pre-0.1 research software. It has one bundled seed and no responsibly disclosed
-> findings against real importers. It is not a compliance, tax, legal, or
-> accounting tool.
+Version `0.1.0a1` is a technically reviewed alpha candidate. The recorded
+research gate validated 10,000 unique semantic fingerprints and locally
+retained three private compatibility observations across three of five
+open-source importer adapters. Public commitments do not independently
+substantiate them; details remain private before maintainer notification. Rechnungsprobe does
+not establish tax, legal, accounting, or general compliance correctness.
 
 ## Requirements
 
-- Python 3.11–3.13.
-- A Java runtime available as `java` for the bundled KoSIT validator.
-- Docker only when using the container target runner.
+- CPython 3.11, 3.12, or 3.13.
+- Java available as `java` for the bundled KoSIT validator.
+- Docker for the recommended isolated importer path.
 
-The supported profile is pinned as
-`xrechnung-ubl-3.0.2-2026-01-31`: KoSIT validator 1.6.2 and XRechnung
-configuration 2026-01-31. Their versions, sources, licenses, and SHA-256 values
-are recorded in [docs/research.md](docs/research.md) and verified before use.
-Campaigns do not fetch profile artifacts from the network.
+The only released profile is
+`xrechnung-ubl-3.0.2-2026-01-31`, using KoSIT validator 1.6.2 and configuration
+2026-01-31. Versions, source URLs, licenses, and SHA-256 values are pinned and
+verified offline before use.
 
-## Install and run
+## Install
+
+After the owner-authorized publication:
 
 ```bash
-python -m pip install -e ".[dev]"
+python -m pip install rechnungsprobe==0.1.0a1
+rechnungsprobe --version
+```
 
+For a source checkout:
+
+```bash
+python -m pip install --require-hashes -r requirements/ci.txt
+python -m pip install --no-deps --no-build-isolation .
+```
+
+## Generate and validate a corpus
+
+```bash
+rechnungsprobe corpus \
+  --output corpus \
+  --count 1000 \
+  --seed 42
+
+rechnungsprobe corpus-gate \
+  --output gate \
+  --count 10000 \
+  --seed 42
+```
+
+Corpus generation is deterministic, resumable, and shardable through the Python
+API. A corpus gate records the corpus root, validation root, mutator and
+interaction coverage, profile identity, and execution environment.
+The validation root binds each invoice digest and outcome to a normalized KoSIT
+semantic-report digest; volatile report timestamps and workspace paths are
+excluded.
+
+## Test a digest-pinned container
+
+```bash
 rechnungsprobe fuzz \
   --output run \
   --count 20 \
+  --seed 42 \
+  --container sha256:<64-hex-local-image-id> \
+  --input-mode file \
+  --output-file roundtrip.xml \
+  --predicate output-invalid \
+  -- importer-command /input/invoice.xml
+```
+
+Registry references pinned as `name@sha256:<digest>` are also accepted. The
+runner disables networking, uses a read-only root filesystem, drops
+capabilities, sets `no-new-privileges`, uses an unprivileged user, and bounds
+processes, memory, CPU, time, output, input, and file growth. Daemon-owned
+containers are explicitly killed, removed, and checked after the Docker client
+exits or times out.
+
+Predicates are `crash`, `timeout`, bounded stdout `json`, `output-invalid`, and
+declared `field-loss`. Output predicates require `--output-file`; field loss
+also requires one or more `--field` values.
+
+## Trusted local execution
+
+Local commands are non-isolated and can access the host filesystem and network.
+They require explicit current-user authority:
+
+```bash
+rechnungsprobe fuzz \
+  --trusted-local \
+  --output run \
   --predicate crash \
   -- python importer.py
 ```
 
-Everything after `--` is an argument vector; Rechnungsprobe does not invoke a
-shell. For a local target, `--input-mode file` appends the fixed filename
-`input.xml` to the command. A container file target mounts the invoice read-only
-at `/input/invoice.xml`; its command must name that path explicitly. For example:
+Rechnungsprobe uses argument vectors rather than a shell, cleans the inherited
+environment, stages regular-file arguments into the workspace, and applies
+resource bounds. These measures do not turn local execution into a sandbox.
+
+## Verify and replay
 
 ```bash
-rechnungsprobe fuzz \
-  --output run \
-  --container registry.example/importer@sha256:<64-hex-digest> \
-  --input-mode file \
-  --predicate crash \
-  -- importer-command /input/invoice.xml
+rechnungsprobe verify finding.rechnungsprobe
+rechnungsprobe replay finding.rechnungsprobe
 ```
 
-Container images must be digest-pinned. The Docker runner disables networking,
-uses a read-only root filesystem, drops capabilities and privileges, and applies
-resource limits. The local runner applies time, CPU, memory, process, file, and
-output bounds, but it is not a hard host sandbox and does not disable target
-network access.
+`verify` is strictly non-executing. It checks the bounded archive, member order,
+hashes, canonical reports, safe XML, semantic fingerprint, profile, predicate,
+and target metadata.
 
-Other predicates are `timeout`, bounded stdout `json`, `output-invalid`, and
-declared `field-loss`. The latter two require `--output-file`; field loss also
-requires one or more `--field` declarations.
-
-Each campaign writes deterministic corpus metadata and XML cases, `result.json`,
-and `junit.xml`. The first stable finding also produces a deterministic
-`.rechnungsprobe` capsule containing the reduced invoice, replay specification,
-and reports.
+Container capsules replay through the bounded networkless container path. A
+capsule-described local command never executes by default. Supply a trusted
+replacement:
 
 ```bash
-rechnungsprobe verify run/case-000000.rechnungsprobe
-rechnungsprobe replay run/case-000000.rechnungsprobe
+rechnungsprobe replay finding.rechnungsprobe \
+  --replacement-command python reviewed-importer.py
 ```
 
-`verify` checks the bounded archive, hashes, canonical reports, invoice structure,
-and recorded metadata. `replay` additionally revalidates the invoice with the
-pinned official profile and reruns the exact recorded target and predicate.
-Because capsules are untrusted, replaying a local-process target requires the
-explicit `--allow-local-target` flag; inspect the verified metadata first.
-Replay rejects resource policies above fixed safety caps and verifies the target
-executable/image, command, and I/O configuration digest before execution.
+The alternative
+`--unsafe-use-capsule-local-command` is deliberately conspicuous and executes
+the capsule-described host command without isolation.
 
-Exit status is `0` for a clean campaign or reproduced replay, `1` when a campaign
-finds a match or a replay no longer matches, and `2` for an operational or
-security error.
+Exit status is `0` for a clean campaign or reproduced replay, `1` when a
+campaign finds a match or replay no longer matches, and `2` for an operational
+or security error.
 
-The first release remains intentionally limited to one XRechnung UBL profile.
-It excludes a GUI, Peppol transport, invoice authoring, ZUGFeRD, PDF rendering,
-tax advice, and accounting-system connectors. The outstanding release evidence
-is tracked in [docs/quality-plan.md](docs/quality-plan.md).
+## Evidence and limitations
+
+- [Benchmark](docs/benchmark.md)
+- [Methodology](docs/methodology.md)
+- [Security model](docs/security-model.md)
+- [Finding format](docs/finding-format.md)
+- [Compatibility policy](docs/compatibility.md)
+- [Quality plan](docs/quality-plan.md)
+
+The alpha covers one XRechnung UBL profile. It excludes a GUI, Peppol transport,
+invoice authoring, ZUGFeRD/PDF processing, tax advice, and production accounting
+connectors. Minimality is 1-minimal under `invoice-node-value-v1`, not globally
+minimal.
 
 ## Development
 
@@ -98,7 +153,7 @@ is tracked in [docs/quality-plan.md](docs/quality-plan.md).
 python -m pytest
 python -m ruff check .
 python -m mypy
-python -m build
+python -m build --no-isolation
 ```
 
-Apache-2.0 licensed.
+Apache-2.0 licensed. See [SUPPORT.md](SUPPORT.md) and [SECURITY.md](SECURITY.md).

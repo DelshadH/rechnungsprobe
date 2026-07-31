@@ -3,7 +3,9 @@ from __future__ import annotations
 import hashlib
 from dataclasses import dataclass
 from pathlib import Path
-from xml.etree import ElementTree
+
+# ElementTree receives only the bounded bytes accepted by the Expat preflight.
+from xml.etree import ElementTree  # nosec B405
 from xml.parsers import expat
 
 from rechnungsprobe.security import SecurityError, open_regular_file
@@ -115,7 +117,8 @@ def parse_xml_bytes(data: bytes, limits: XmlLimits | None = None) -> XmlDocument
     try:
         # Expat has already rejected DTD/entity/XInclude features and enforced
         # structural limits before ElementTree sees the same bounded bytes.
-        root = ElementTree.fromstring(data)
+        # The fail-closed Expat preflight above has already rejected active XML.
+        root = ElementTree.fromstring(data)  # nosec B314
     except ElementTree.ParseError as error:
         raise SecurityError(f"malformed XML: {error}") from error
     return XmlDocument(

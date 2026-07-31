@@ -65,11 +65,12 @@ def _safe_member_parts(name: str) -> tuple[str, ...]:
 
 def _entry_kind(entry: zipfile.ZipInfo) -> str:
     unix_mode = entry.external_attr >> 16 if entry.create_system == 3 else 0
-    if unix_mode and stat.S_ISLNK(unix_mode):
+    file_type = stat.S_IFMT(unix_mode)
+    if file_type == stat.S_IFLNK:
         raise SecurityError(f"archive link is not allowed: {entry.filename!r}")
-    if unix_mode and not (stat.S_ISREG(unix_mode) or stat.S_ISDIR(unix_mode)):
+    if file_type not in {0, stat.S_IFREG, stat.S_IFDIR}:
         raise SecurityError(f"special archive entry is not allowed: {entry.filename!r}")
-    return "directory" if entry.is_dir() else "file"
+    return "directory" if file_type == stat.S_IFDIR or entry.is_dir() else "file"
 
 
 def safe_extract_zip(

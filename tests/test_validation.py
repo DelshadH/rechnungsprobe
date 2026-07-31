@@ -21,6 +21,15 @@ def test_official_seed_passes_pinned_kosit_profile(tmp_path: Path) -> None:
     assert result.report_sha256 is not None
 
 
+def test_official_report_digest_is_workspace_independent(tmp_path: Path) -> None:
+    first = validate_invoice(bundled_seed_path(), workspace=tmp_path / "first")
+    second = validate_invoice(bundled_seed_path(), workspace=tmp_path / "second")
+
+    assert first.valid is True
+    assert second.valid is True
+    assert first.report_sha256 == second.report_sha256
+
+
 def test_validator_is_not_started_when_jar_integrity_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

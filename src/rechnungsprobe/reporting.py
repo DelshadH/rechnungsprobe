@@ -5,8 +5,16 @@ import math
 import re
 from dataclasses import asdict, dataclass
 from typing import Any, cast
-from xml.etree import ElementTree
 
+# Report XML is constructed and serialized here, never parsed.
+from xml.etree import ElementTree  # nosec B405
+
+from rechnungsprobe.findings import FindingKind, classify_finding
+from rechnungsprobe.provenance import (
+    FindingProvenance,
+    provenance_from_payload,
+    provenance_payload,
+)
 from rechnungsprobe.security import SecurityError
 
 REPORT_SCHEMA = "https://rechnungsprobe.dev/schemas/finding-v1"
@@ -37,8 +45,23 @@ class FindingRecord:
     one_minimal: bool
     reproductions: int
     synthetic: bool
+    provenance: FindingProvenance | None = None
+
+    @property
+    def finding_kind(self) -> FindingKind:
+        return classify_finding(
+            self.predicate,
+            termination=self.termination,
+            details=self.details,
+        )
+
+    @property
+    def evidence_class(self) -> str:
+        return "synthetic" if self.synthetic else "real"
 
     def __post_init__(self) -> None:
+        if not self.synthetic and self.provenance is None:
+            raise SecurityError("real finding record requires provenance")
         text_values = (
             self.case_id,
             self.predicate,
@@ -61,12 +84,29 @@ class FindingRecord:
             or not 1 <= self.reproductions <= 100
         ):
             raise SecurityError("finding record is invalid or exceeds its limits")
+        if self.provenance is not None and (
+            self.provenance.target_digest != self.target_digest
+            or self.provenance.profile.get("identifier") != self.profile_id
+            or len(self.provenance.observations) != self.reproductions
+            or self.provenance.minimization.one_minimal != self.one_minimal
+            or any(
+                observation.termination != self.termination
+                or observation.returncode != self.returncode
+                for observation in self.provenance.observations
+            )
+        ):
+            raise SecurityError("finding record and provenance disagree")
 
 
 def _record_payload(record: FindingRecord) -> dict[str, object]:
     payload = asdict(record)
     payload["details"] = list(record.details)
     payload["mutations"] = list(record.mutations)
+    payload["finding_kind"] = record.finding_kind
+    payload["evidence_class"] = record.evidence_class
+    payload["provenance"] = (
+        provenance_payload(record.provenance) if record.provenance is not None else None
+    )
     return payload
 
 
@@ -87,6 +127,9 @@ def finding_record_from_payload(payload: object) -> FindingRecord:
         "one_minimal",
         "reproductions",
         "synthetic",
+        "finding_kind",
+        "evidence_class",
+        "provenance",
     }
     if set(payload) != expected:
         raise SecurityError("finding record has unexpected fields")
@@ -105,6 +148,7 @@ def finding_record_from_payload(payload: object) -> FindingRecord:
                 "one_minimal",
                 "reproductions",
                 "synthetic",
+                "provenance",
             }
         )
         or not isinstance(details, list)
@@ -115,9 +159,10 @@ def finding_record_from_payload(payload: object) -> FindingRecord:
         or type(payload["one_minimal"]) is not bool
         or type(reproductions) is not int
         or type(payload["synthetic"]) is not bool
+        or payload["evidence_class"] not in {"real", "synthetic"}
     ):
         raise SecurityError("finding record has invalid JSON types")
-    return FindingRecord(
+    record = FindingRecord(
         case_id=payload["case_id"],
         predicate=payload["predicate"],
         profile_id=payload["profile_id"],
@@ -131,7 +176,18 @@ def finding_record_from_payload(payload: object) -> FindingRecord:
         one_minimal=payload["one_minimal"],
         reproductions=reproductions,
         synthetic=payload["synthetic"],
+        provenance=(
+            provenance_from_payload(payload["provenance"])
+            if payload["provenance"] is not None
+            else None
+        ),
     )
+    if (
+        payload["finding_kind"] != record.finding_kind
+        or payload["evidence_class"] != record.evidence_class
+    ):
+        raise SecurityError("finding classification is inconsistent with its evidence")
+    return record
 
 
 def finding_json(records: tuple[FindingRecord, ...]) -> bytes:
@@ -183,6 +239,8 @@ def finding_junit(records: tuple[FindingRecord, ...]) -> bytes:
             f"profile={record.profile_id}\n"
             f"target={record.target_digest}\n"
             f"invoice_sha256={record.invoice_sha256}\n"
+            f"finding_kind={record.finding_kind}\n"
+            f"evidence_class={record.evidence_class}\n"
             f"one_minimal={str(record.one_minimal).lower()}\n"
         )
     return (
@@ -202,6 +260,37 @@ def finding_junit(records: tuple[FindingRecord, ...]) -> bytes:
 def strict_json(data: bytes, *, max_bytes: int = 2 * 1024 * 1024) -> Any:
     if len(data) > max_bytes:
         raise SecurityError("JSON document exceeds the size limit")
+    try:
+        text = data.decode("utf-8", errors="strict")
+    except UnicodeDecodeError as error:
+        raise SecurityError("document is not strict JSON") from error
+
+    depth = 0
+    structural_tokens = 0
+    in_string = False
+    escaped = False
+    for character in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+        elif character in "[{":
+            depth += 1
+            structural_tokens += 1
+            if depth > 64:
+                raise SecurityError("JSON document exceeds the nesting limit")
+        elif character in "]}":
+            depth -= 1
+        elif character in ",:":
+            structural_tokens += 1
+        if structural_tokens > 100_000:
+            raise SecurityError("JSON document exceeds the structural limit")
 
     def reject_duplicates(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
         result: dict[str, Any] = {}
@@ -215,17 +304,27 @@ def strict_json(data: bytes, *, max_bytes: int = 2 * 1024 * 1024) -> Any:
         raise SecurityError(f"JSON contains non-finite number: {value}")
 
     def parse_float(value: str) -> float:
+        if len(value) > 128:
+            raise SecurityError("JSON number exceeds the length limit")
         parsed = float(value)
         if not math.isfinite(parsed):
             raise SecurityError(f"JSON contains non-finite number: {value}")
         return parsed
 
+    def parse_int(value: str) -> int:
+        if len(value) > 128:
+            raise SecurityError("JSON number exceeds the length limit")
+        return int(value)
+
     try:
         return json.loads(
-            data.decode("utf-8", errors="strict"),
+            text,
             object_pairs_hook=reject_duplicates,
             parse_constant=reject_constant,
             parse_float=parse_float,
+            parse_int=parse_int,
         )
-    except (UnicodeDecodeError, json.JSONDecodeError) as error:
+    except SecurityError:
+        raise
+    except (json.JSONDecodeError, RecursionError, ValueError, OverflowError) as error:
         raise SecurityError("document is not strict JSON") from error

@@ -8,7 +8,9 @@ from datetime import date
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, cast
-from xml.etree import ElementTree
+
+# Parsing is centralized in xmlsafe; this module only operates on safe trees.
+from xml.etree import ElementTree  # nosec B405
 
 from rechnungsprobe.xmlsafe import load_xml, parse_xml_bytes
 

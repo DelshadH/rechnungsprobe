@@ -10,22 +10,149 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    name: Python ${{ matrix.python }} / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
         python: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m pip install --upgrade pip
-      - run: python -m pip install -e ".[dev]"
+      - run: python -m pip install --require-hashes -r requirements/ci.txt
+      - run: python -m build --no-isolation
+      - name: Install the built wheel
+        run: >-
+          python -c "import glob,subprocess,sys;
+          subprocess.check_call([sys.executable,'-m','pip','install','--no-deps',glob.glob('dist/*.whl')[0]])"
       - run: python -m pytest
       - run: python -m ruff check .
-      - run: python -m mypy
-      - run: python -m build
+      - name: Type-check both platform branches
+        run: |
+          python -m mypy --platform linux
+          python -m mypy --platform win32
+      - name: Smoke-test the installed wheel outside the checkout
+        run: >-
+          python -c "import os,tempfile;
+          os.chdir(tempfile.mkdtemp());
+          from rechnungsprobe.cli import main;
+          assert main(['--version']) == 0"
+
+  metadata:
+    name: Metadata and security gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --require-hashes -r requirements/ci.txt
+      - run: python -m pip install --no-deps --no-build-isolation .
+      - name: Validate schemas and public records
+        run: |
+          for schema in schemas/*.schema.json; do
+            check-jsonschema --check-metaschema "$schema"
+          done
+          check-jsonschema --schemafile schemas/corpus-gate-v1.schema.json research/evidence/corpus-gate.json
+          check-jsonschema --schemafile schemas/importer-catalog-v1.schema.json research/importers/catalog.json
+          check-jsonschema --schemafile schemas/research-results-v1.schema.json research/results.json
+      - name: Audit the hash-locked environment
+        run: python -m pip_audit --require-hashes -r requirements/ci.txt
+      - name: Scan Python sources for security defects
+        run: python -m bandit -r src
+      - name: Reject secrets outside the reviewed baseline
+        run: detect-secrets-hook --baseline .secrets.baseline $(git ls-files)
+      - name: Validate distribution metadata
+        run: |
+          python -m build --no-isolation
+          twine check dist/*
+          mkdir release
+          python tools/release_artifacts.py inventory dist release/package-inventory.json
+      - name: Require approved runtime licenses
+        run: |
+          python -m venv --without-pip .runtime-license
+          python -m pip --python .runtime-license/bin/python install --require-hashes -r requirements/runtime.txt
+          python -m pip --python .runtime-license/bin/python install --no-deps dist/*.whl
+          pip-licenses --python .runtime-license/bin/python --allow-only 'Apache-2.0;BSD-3-Clause'
+
+  reproducible-build:
+    name: Reproducible distributions
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - name: Use the exact commit timestamp
+        run: echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)" >> "$GITHUB_ENV"
+      - run: python -m pip install --require-hashes -r requirements/ci.txt
+      - name: Create two clean source roots at the exact commit
+        run: |
+          git clone --no-local . "$RUNNER_TEMP/source-a"
+          git clone --no-local . "$RUNNER_TEMP/source-b"
+          test "$(git -C "$RUNNER_TEMP/source-a" rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git -C "$RUNNER_TEMP/source-b" rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Build in each clean source root
+        run: |
+          (cd "$RUNNER_TEMP/source-a" && python -m build --no-isolation --outdir "$RUNNER_TEMP/dist-a")
+          (cd "$RUNNER_TEMP/source-b" && python -m build --no-isolation --outdir "$RUNNER_TEMP/dist-b")
+      - name: Require byte-identical wheel and source distribution
+        run: |
+          cmp "$RUNNER_TEMP"/dist-a/*.whl "$RUNNER_TEMP"/dist-b/*.whl
+          cmp "$RUNNER_TEMP"/dist-a/*.tar.gz "$RUNNER_TEMP"/dist-b/*.tar.gz
+
+  container-isolation:
+    name: Live container isolation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RECHNUNGSPROBE_DOCKER_TESTS: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - run: python -m pip install --require-hashes -r requirements/ci.txt
+      - run: python -m pip install --no-deps --no-build-isolation .
+      - run: docker pull alpine@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
+      - run: python -m pytest tests/test_container_integration.py
+
+  corpus-gate:
+    name: Official 10,000-case corpus
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5.0.0
+        with:
+          distribution: temurin
+          java-version: "17"
+      - run: python -m pip install --require-hashes -r requirements/ci.txt
+      - run: python -m pip install --no-deps --no-build-isolation .
+      - run: rechnungsprobe corpus-gate --output .corpus-gate --count 10000 --seed 42
+      - name: Compare deterministic roots with the reviewed evidence
+        run: >-
+          python -c "import json,pathlib;
+          actual=json.loads(pathlib.Path('.corpus-gate/validation.json').read_text());
+          expected=json.loads(pathlib.Path('research/results.json').read_text())['corpus_gate'];
+          keys=('corpus_root_sha256','validation_root_sha256','validated_count','unique_semantic_fingerprints');
+          assert {k:actual[k] for k in keys} == {k:expected[k] for k in keys}"

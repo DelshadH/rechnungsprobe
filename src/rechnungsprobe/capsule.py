@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from rechnungsprobe.model import parse_invoice, semantic_fingerprint
+from rechnungsprobe.profiles import XRECHNUNG_UBL_3_0_2
+from rechnungsprobe.provenance import profile_payload, resource_policy_payload
 from rechnungsprobe.replay import ReplaySpecification, parse_replay_json, replay_json
 from rechnungsprobe.reporting import (
     REPORT_SCHEMA,
@@ -75,6 +77,25 @@ def _zip_info(name: str) -> zipfile.ZipInfo:
     return information
 
 
+def _verify_provenance_binding(
+    record: FindingRecord,
+    replay: ReplaySpecification,
+) -> None:
+    provenance = record.provenance
+    if provenance is None:
+        if not record.synthetic:
+            raise SecurityError("real finding capsule requires provenance")
+        return
+    if (
+        provenance.profile != profile_payload(XRECHNUNG_UBL_3_0_2)
+        or provenance.resource_policy != resource_policy_payload(replay.policy)
+        or provenance.target_digest != record.target_digest
+        or len(provenance.observations) != record.reproductions
+        or provenance.minimization.one_minimal != record.one_minimal
+    ):
+        raise SecurityError("capsule provenance and replay specification disagree")
+
+
 def create_finding_capsule(
     output_path: Path,
     *,
@@ -93,6 +114,7 @@ def create_finding_capsule(
     replay_document = replay_json(replay)
     if replay.predicate.name != record.predicate:
         raise SecurityError("finding predicate does not match its replay configuration")
+    _verify_provenance_binding(record, replay)
     if isinstance(replay.target, ContainerTarget) and not hmac.compare_digest(
         target_configuration_digest(replay.target),
         record.target_digest,
@@ -230,6 +252,7 @@ def verify_finding_capsule(path: Path) -> VerifiedCapsule:
     replay = parse_replay_json(members["replay.json"])
     if replay.predicate.name != record.predicate:
         raise SecurityError("capsule replay predicate and result disagree")
+    _verify_provenance_binding(record, replay)
     if isinstance(replay.target, ContainerTarget) and not hmac.compare_digest(
         target_configuration_digest(replay.target),
         record.target_digest,
