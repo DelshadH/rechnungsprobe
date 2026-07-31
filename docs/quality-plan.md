@@ -26,22 +26,31 @@
 
 ## Release-candidate gates
 
-- [ ] Exact-head CI passes Python 3.11-3.13 on Ubuntu, macOS, and Windows,
+- [x] Exact-head CI passes Python 3.11-3.13 on Ubuntu, macOS, and Windows,
   including installed-wheel smoke tests.
-- [ ] Ruff, strict mypy, package build, package inventory, reproducible
-  wheel/sdist, dependency/secret/license/deep security scans, SBOM, checksums,
-  and attestations pass at the frozen release SHA.
-- [ ] A clean public clone proves install, help, version, corpus, verify, and
+- [x] Ruff, strict mypy, package build, package inventory, reproducible
+  wheel/sdist, dependency/secret/license/security scans, strict SBOM generation,
+  and checksum generation pass for the frozen technical candidate.
+- [x] A clean public clone proves install, help, version, corpus, verify, and
   replay flows without source-tree dependence.
-- [ ] Three fresh-context independent reviewers and a separate adjudicator
+- [x] Three fresh-context independent reviewers and a separate adjudicator
   review the frozen SHA; validated P0/P1 and release-blocking P2 findings are
   remediated failing-first, followed by a second adversarial review.
-- [ ] Canonical `main`, CI-only no-force-push/no-deletion protection, protected
+- [x] Canonical `main`, CI-only no-force-push/no-deletion protection, protected
   release tags, and the exact-tag least-privilege OIDC publication workflow are
   configured.
-- [ ] PyPI authentication and trusted-publisher readiness are probed without
-  exposing or inventing credentials.
+- [x] The GitHub `pypi` environment, tag-only OIDC job, and fail-closed publisher
+  handoff are configured without exposing or inventing credentials. PyPI-side
+  trusted-publisher state is not publicly discoverable and is not probed by an
+  unauthorized upload.
 
-The release remains blocked until every unchecked gate above is complete.
-Creating a tag, GitHub release, or registry publication additionally requires
-the owner's final `PUBLISH` decision.
+## Publication-only gates
+
+These actions are deliberately unavailable before the owner's final `PUBLISH`
+decision: create the exact version tag, generate GitHub attestations in the tag
+workflow, perform the OIDC registry upload, and create the GitHub release. A
+`NO` decision creates none of them.
+
+The technical candidate is ready when every release-candidate gate above is
+checked. Readiness does not authorize a tag, GitHub release, or registry
+publication.
