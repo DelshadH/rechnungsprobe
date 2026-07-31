@@ -12,9 +12,10 @@
   in `research/evidence/corpus-gate.json`.
 - [x] Five active open-source UBL readers have lock-controlled, digest-pinned
   adapters and exact source/license metadata.
-- [x] Three genuine findings across three importers are officially validated,
-  reduced, independently verified as 1-minimal, and reproduced five times.
-  Public mapping remains anonymized pending maintainer notification.
+- [x] Three private compatibility observations across three importers were
+  locally validated, reduced, checked as 1-minimal, and reproduced five times.
+  Public commitments do not independently substantiate them; mapping and
+  capsules remain private pending maintainer notification.
 - [x] Verification is non-executing; capsule local commands have no default
   authority; trusted local execution is conspicuously non-isolated.
 - [x] Container execution is networkless, read-only, unprivileged, bounded, and

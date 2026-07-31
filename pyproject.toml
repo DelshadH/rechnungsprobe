@@ -46,6 +46,7 @@ include = [
   "/src",
   "/tests",
   "/third_party",
+  "/tools",
   "/AGENTS.md",
   "/CHANGELOG.md",
   "/CODE_OF_CONDUCT.md",
@@ -69,3 +70,4 @@ target-version = "py311"
 python_version = "3.11"
 strict = true
 packages = ["rechnungsprobe"]
+mypy_path = "src"

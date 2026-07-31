@@ -16,9 +16,9 @@ newer versions or hosted services.
 - Coverage: all 20 released mutators and all 380 ordered two-mutator
   interaction buckets.
 - Corpus root:
-  `sha256:7fb3a04261779dc211f277f26ec7626636a954b24f23326cd318fb681faa511b`.
+  `sha256:bfe4b154a8d8d2d2776b8cd85f45d613c3e17ed7630711f96d35448470a624c7`.
 - Validation root:
-  `sha256:1d85b79045877e66c1ea369bfc8977e5bd383ade1b649fbbeed438b5c1ecf11c`.
+  `sha256:5b3b0d9518f570a5f8f33c06bbee9a72e5bca43722faf50379c73d871444f9ba`.
 
 The machine-readable environment, artifact hashes, coverage, and roots are in
 `research/evidence/corpus-gate.json`.
@@ -39,7 +39,8 @@ findings were replayed five times from clean workspaces.
 
 ## Results
 
-Three genuine findings were retained across three importers:
+Three locally reproduced compatibility observations were retained across three
+importers:
 
 | Evidence | Classification | Reproductions | 1-minimal |
 | --- | --- | ---: | --- |
@@ -47,10 +48,11 @@ Three genuine findings were retained across three importers:
 | RP-2026-002 | crash during round-trip | 5 | yes |
 | RP-2026-003 | invalid round-trip / preservation loss | 5 | yes |
 
-The public branch keeps the mapping anonymized until maintainers have a
-reasonable notification path. Capsule hashes and classifications are in
-`research/results.json`; disclosure-safe capsules are release assets, not
-Python package data.
+The public branch keeps the mapping and capsules private until maintainers have
+a reasonable notification path. Capsule hashes and classifications in
+`research/results.json` are cryptographic commitments, not enough to reproduce
+or independently audit the observations. The private capsules are explicitly
+not release assets or Python package data.
 
 ## Dependency review
 
@@ -66,16 +68,22 @@ research-target limitation rather than being suppressed.
 - The campaign is compatibility research, not proof that an importer is
   generally incorrect.
 - Only one pinned XRechnung profile and UBL syntax are covered.
-- Public evidence is deliberately anonymized before maintainer notification.
-- Container image IDs are local content-addressed build products; rebuild
-  inputs are pinned, but no public container registry is claimed.
+- Public evidence is deliberately anonymized before maintainer notification and
+  does not independently substantiate the three private observations.
+- Container image IDs identify the reviewed local build products. Base images,
+  direct versions, and available lockfiles are pinned, but transitive build
+  graphs are not uniformly checksum-locked and byte-identical image rebuilds
+  are not claimed. No public container registry is claimed.
 - KoSIT process startup dominates reduction time. Batched validation preserves
   deterministic greedy order but does not make minimization globally optimal.
 - The reported minimum is 1-minimal only under `invoice-node-value-v1`.
 
 ## Reproduction
 
-Build an adapter with `docker build --provenance=false --pull=false`, verify its
-image ID against the catalog, then use `rechnungsprobe replay` with the capsule.
-Verification is non-executing. Container replay remains networkless and bounded;
-local replay requires a replacement command or an explicit unsafe opt-in.
+Build an adapter with `docker build --provenance=false --pull=false` from the
+pinned inputs to obtain a functionally comparable target; matching the recorded
+local image ID is not promised. Exact observation replay additionally requires
+the corresponding private capsule and recorded image, so it is unavailable
+from the public branch until disclosure. Capsule verification is non-executing.
+Container replay remains networkless and bounded; local replay requires a
+replacement command or an explicit unsafe opt-in.

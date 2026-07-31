@@ -27,7 +27,7 @@ def _record() -> FindingRecord:
         mutations=("buyer-reference@1",),
         one_minimal=True,
         reproductions=5,
-        synthetic=False,
+        synthetic=True,
     )
 
 
@@ -46,9 +46,9 @@ def test_reports_make_finding_kind_and_evidence_class_explicit() -> None:
     payload = json.loads(finding_json((record,)))
 
     assert payload["findings"][0]["finding_kind"] == "field-lost-or-altered"
-    assert payload["findings"][0]["evidence_class"] == "real"
+    assert payload["findings"][0]["evidence_class"] == "synthetic"
     assert b"finding_kind=field-lost-or-altered" in finding_junit((record,))
-    assert b"evidence_class=real" in finding_junit((record,))
+    assert b"evidence_class=synthetic" in finding_junit((record,))
 
 
 def test_junit_escapes_untrusted_details() -> None:

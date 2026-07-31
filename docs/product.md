@@ -25,8 +25,9 @@ validator 1.6.2 and configuration 2026-01-31. It includes:
   predicates;
 - deterministic reduction, independent 1-minimality verification, repeated
   reproduction, complete provenance, JSON/JUnit reports, and bounded capsules;
-- five open-source importer adapters and three anonymized real findings across
-  three importers, each reproduced five times and 1-minimal.
+- five open-source importer adapters and three private, anonymized compatibility
+  observations across three importers, each locally reproduced five times and
+  reported as 1-minimal. Public commitments are not independent proof.
 
 The finding mapping remains anonymized pending a reasonable maintainer
 notification path. Remaining exact-head CI, packaging, security, repository,
@@ -60,10 +61,11 @@ ZUGFeRD, invoice authoring, SaaS, and production accounting connectors.
 
 - 10,000 materially distinct semantic fingerprints cover every released
   mutator and declared interaction bucket and pass the official profile.
-- At least three genuine findings or meaningful losses occur across at least
-  two open-source importers; synthetic evidence does not qualify.
-- Every retained finding is valid, five-times reproduced in a clean
-  content-addressed container, and 1-minimal under declared operations.
+- Report the actual number of private or public importer observations without
+  fabricating evidence or blocking the entire alpha on a target count alone.
+- Every claimed retained observation is valid, repeatedly reproduced against a
+  recorded target, and 1-minimal under declared operations; public claims state
+  whether the evidence is independently reproducible.
 - Identical recorded inputs produce byte-identical corpus and result metadata.
 - Hostile XML, JSON, archives, paths, commands, outputs, and process trees are
   rejected or contained within documented boundaries.

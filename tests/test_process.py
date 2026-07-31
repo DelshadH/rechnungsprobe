@@ -145,6 +145,23 @@ def test_bounded_process_rejects_shell_command_strings(tmp_path: Path) -> None:
         )
 
 
+def test_bounded_process_fails_closed_when_workspace_scan_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def denied(_path: object) -> object:
+        raise PermissionError("synthetic traversal denial")
+
+    monkeypatch.setattr("rechnungsprobe.process.os.scandir", denied)
+
+    with pytest.raises(SecurityError, match="inspected safely"):
+        run_bounded_process(
+            (sys.executable, "-c", "pass"),
+            cwd=tmp_path,
+            policy=ProcessPolicy(),
+        )
+
+
 @pytest.mark.skipif(not hasattr(os, "symlink"), reason="symlinks are unavailable")
 def test_bounded_process_rejects_symlink_working_directory(tmp_path: Path) -> None:
     real = tmp_path / "real"

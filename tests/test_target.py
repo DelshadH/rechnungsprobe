@@ -281,8 +281,24 @@ def test_container_target_accepts_a_content_addressed_local_image_id(
     assert target.image in command
 
 
+def test_container_target_rejects_nested_output_paths(tmp_path: Path) -> None:
+    target = ContainerTarget(
+        image="sha256:" + "f" * 64,
+        command=("import",),
+        input_mode="stdin",
+        output_file="nested/roundtrip.xml",
+    )
+
+    with pytest.raises(SecurityError, match="one declared file"):
+        build_docker_command(
+            target,
+            workspace=tmp_path,
+            policy=ProcessPolicy(),
+        )
+
+
 @pytest.mark.skipif(os.name == "nt", reason="POSIX mode bits are not enforced on Windows")
-def test_container_output_directory_is_writable_by_the_unprivileged_user(
+def test_container_mounts_only_the_declared_writable_output_file(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -314,8 +330,9 @@ def test_container_output_directory_is_writable_by_the_unprivileged_user(
         policy=ProcessPolicy(),
     )
 
-    mode = (tmp_path / "work" / "output").stat().st_mode & 0o777
-    assert mode == 0o733
+    output = tmp_path / "work" / "output" / "roundtrip.xml"
+    assert output.is_file()
+    assert output.stat().st_mode & 0o777 == 0o666
 
 
 def test_container_target_digest_covers_command_and_io_configuration() -> None:

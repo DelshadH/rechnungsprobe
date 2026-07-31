@@ -14,8 +14,14 @@ All notable changes will be recorded here.
 - Added Windows Job Object and POSIX process-group containment, hostile archive,
   JSON, XML, path, junction, timeout, output, process-tree, and target
   substitution regressions.
-- Added five reproducible open-source importer adapters and retained three
-  anonymized, five-times-reproduced, 1-minimal real findings.
+- Added five pinned open-source importer adapters and locally retained three
+  private, anonymized, five-times-reproduced compatibility observations.
 - Added Python 3.11-3.13 / Ubuntu-macOS-Windows CI, hash-locked CI
   dependencies, release documentation, benchmark, support policy, and
   compatibility policy.
+- Hardened failure reduction to preserve the exact observed signature, bound
+  real records and capsules to complete provenance, and closed container output
+  accounting gaps by mounting only one declared output file.
+- Added clean-root reproducible builds, exact-SHA successful-CI release gating,
+  least-privilege split publication jobs, package-member inventory, and SBOM
+  coverage for bundled validation artifacts.

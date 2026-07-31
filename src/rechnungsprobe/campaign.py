@@ -10,9 +10,12 @@ from rechnungsprobe.capsule import create_finding_capsule
 from rechnungsprobe.corpus import Candidate, corpus_manifest, generate_candidates
 from rechnungsprobe.model import parse_invoice, serialize_invoice
 from rechnungsprobe.predicates import (
+    CrashPredicate,
     EvaluationContext,
+    JsonPredicate,
     OutputValidityPredicate,
     PredicateEvaluation,
+    TimeoutPredicate,
 )
 from rechnungsprobe.process import ProcessPolicy
 from rechnungsprobe.profiles import XRECHNUNG_UBL_3_0_2, bundled_seed_path
@@ -49,6 +52,38 @@ class CampaignResult:
     candidate_count: int
     finding_count: int
     profile_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class _FailureSignature:
+    predicate: str
+    termination: str
+    returncode: int | None
+    details: tuple[str, ...]
+    stdout_sha256: str | None
+    stderr_sha256: str | None
+    output_sha256: str | None
+
+
+def _failure_signature(
+    result: TargetResult,
+    evaluation: PredicateEvaluation,
+    predicate: ReplayPredicate,
+) -> _FailureSignature:
+    output_sensitive = isinstance(
+        predicate,
+        (CrashPredicate, TimeoutPredicate, JsonPredicate),
+    )
+    observation = observation_from_result(result)
+    return _FailureSignature(
+        predicate=evaluation.predicate,
+        termination=result.process.termination,
+        returncode=result.process.returncode,
+        details=evaluation.details,
+        stdout_sha256=observation.stdout_sha256 if output_sensitive else None,
+        stderr_sha256=observation.stderr_sha256 if output_sensitive else None,
+        output_sha256=observation.output_sha256 if output_sensitive else None,
+    )
 
 
 @dataclass(slots=True)
@@ -293,6 +328,11 @@ def run_campaign(
             if not initial_evaluation.matched:
                 continue
             target_digest = initial_result.target_digest
+            initial_signature = _failure_signature(
+                initial_result,
+                initial_evaluation,
+                predicate,
+            )
 
             def is_valid(invoice_xml: bytes) -> bool:
                 digest = hashlib.sha256(invoice_xml).hexdigest()
@@ -332,6 +372,7 @@ def run_campaign(
             def preserves_finding(
                 invoice_xml: bytes,
                 expected_digest: str = target_digest,
+                expected_signature: _FailureSignature = initial_signature,
             ) -> bool:
                 result, evaluation = _run_and_evaluate(
                     invoice_xml,
@@ -344,7 +385,11 @@ def run_campaign(
                 )
                 if result.target_digest != expected_digest:
                     raise SecurityError("target digest changed during reduction")
-                return evaluation.matched
+                return evaluation.matched and _failure_signature(
+                    result,
+                    evaluation,
+                    predicate,
+                ) == expected_signature
 
             shrunk = shrink_invoice(
                 parse_invoice(candidate.xml),
@@ -379,8 +424,16 @@ def run_campaign(
                 )
                 if final_result.target_digest != target_digest:
                     raise SecurityError("target digest changed during reproduction")
-                if not final_evaluation.matched:
-                    raise SecurityError("finding did not reproduce consistently")
+                if (
+                    not final_evaluation.matched
+                    or _failure_signature(
+                        final_result,
+                        final_evaluation,
+                        predicate,
+                    )
+                    != initial_signature
+                ):
+                    raise SecurityError("exact finding signature did not reproduce")
                 observations.append(observation_from_result(final_result))
             if final_result is None or final_evaluation is None:
                 raise RuntimeError("reproduction loop produced no target result")

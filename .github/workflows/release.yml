@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
+      actions: read
       contents: read
       id-token: write
       attestations: write
@@ -25,6 +26,15 @@ jobs:
       - name: Use the exact commit timestamp
         run: echo "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)" >> "$GITHUB_ENV"
       - run: python -m pip install --require-hashes -r requirements/ci.txt
+      - name: Require successful exact-SHA main CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          successful=$(gh api --method GET \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+            -f head_sha="$GITHUB_SHA" -f status=success -f per_page=100 \
+            --jq '[.workflow_runs[] | select(.event == "push" and .head_branch == "main")] | length')
+          test "$successful" -gt 0
       - name: Require the tag to equal the project version
         env:
           RELEASE_TAG: ${{ github.ref_name }}
@@ -42,6 +52,8 @@ jobs:
       - run: python -m build --no-isolation
       - name: Generate checksums
         run: mkdir release && cd dist && sha256sum *.whl *.tar.gz > ../release/SHA256SUMS
+      - name: Validate and record the exact package contents
+        run: python tools/release_artifacts.py inventory dist release/package-inventory.json
       - name: Materialize the exact runtime environment for the SBOM
         run: |
           python -m venv --without-pip .sbom-venv
@@ -56,6 +68,8 @@ jobs:
             --output-reproducible \
             --output-format JSON \
             --output-file release/rechnungsprobe.cdx.json
+          python tools/release_artifacts.py augment-sbom release/rechnungsprobe.cdx.json
+          python tools/release_artifacts.py validate-sbom release/rechnungsprobe.cdx.json
       - uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3.0.0
         with:
           subject-path: dist/rechnungsprobe-*
@@ -72,8 +86,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  publish:
-    name: Publish exact attested distributions
+  publish-pypi:
+    name: Publish exact attested distributions to PyPI
     if: github.repository == 'DelshadH/rechnungsprobe'
     needs: build
     runs-on: ubuntu-latest
@@ -82,7 +96,6 @@ jobs:
       name: pypi
       url: https://pypi.org/project/rechnungsprobe/
     permissions:
-      contents: write
       id-token: write
     steps:
       - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
@@ -93,6 +106,20 @@ jobs:
         with:
           packages-dir: bundle/dist
           attestations: true
+
+  github-release:
+    name: Create the GitHub release
+    if: github.repository == 'DelshadH/rechnungsprobe'
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: release-distributions
+          path: bundle
       - name: Create the GitHub release from the published bundle
         env:
           GH_TOKEN: ${{ github.token }}

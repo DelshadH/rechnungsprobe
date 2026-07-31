@@ -1,10 +1,10 @@
 {
   "corpus_gate": {
-    "corpus_root_sha256": "sha256:7fb3a04261779dc211f277f26ec7626636a954b24f23326cd318fb681faa511b",
-    "evidence_sha256": "e9869ad79fe0461873a82c9e13c615a46cc631e1b008034d7105ced03701e685",
+    "corpus_root_sha256": "sha256:bfe4b154a8d8d2d2776b8cd85f45d613c3e17ed7630711f96d35448470a624c7",
+    "evidence_sha256": "b61ae5b9e4bf1e27e9753a239a119aaeb5b0a71427b7834ab43c5bc7861bbcf9",
     "unique_semantic_fingerprints": 10000,
     "validated_count": 10000,
-    "validation_root_sha256": "sha256:1d85b79045877e66c1ea369bfc8977e5bd383ade1b649fbbeed438b5c1ecf11c"
+    "validation_root_sha256": "sha256:5b3b0d9518f570a5f8f33c06bbee9a72e5bca43722faf50379c73d871444f9ba"
   },
   "finding_count": 3,
   "findings": [
@@ -32,5 +32,5 @@
   ],
   "profile_id": "xrechnung-ubl-3.0.2-2026-01-31",
   "schema": "https://rechnungsprobe.dev/schemas/research-results-v1",
-  "status": "passed"
+  "status": "private-evidence"
 }

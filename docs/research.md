@@ -78,9 +78,11 @@ selection and runtime commits, package integrity values, licenses, lockfiles,
 base-image digests, and research image IDs are recorded in
 `research/importers/catalog.json`.
 
-The official-validation campaign retained three genuine findings across three
-importers: two crashes and one invalid round-trip/preservation loss. Each final
-source invoice is valid, each finding reproduced five times, and each is
-1-minimal under `invoice-node-value-v1`. The mapping remains anonymized until a
-reasonable maintainer notification path is completed. See
+The official-validation campaign locally retained three private compatibility
+observations across three importers: two crashes and one invalid
+round-trip/preservation loss. The private records report that each final source
+invoice is valid, each observation reproduced five times, and each is 1-minimal
+under `invoice-node-value-v1`. The public repository contains commitments but
+not the capsules or target mapping needed for independent reproduction. Those
+remain private until a reasonable maintainer notification path is completed. See
 [benchmark.md](benchmark.md) for scope and limitations.

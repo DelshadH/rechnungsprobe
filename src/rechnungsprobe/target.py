@@ -307,11 +307,16 @@ def build_docker_command(
     else:
         raise SecurityError("unknown container target input mode")
     if target.output_file is not None:
-        output_directory = workspace.absolute() / "output"
+        portable_output = PurePosixPath(target.output_file.replace("\\", "/"))
+        if len(portable_output.parts) != 1:
+            raise SecurityError("container output must be one declared file")
+        output_path = _output_path(workspace.absolute() / "output", target.output_file)
+        if output_path is None:
+            raise RuntimeError("container output path was not created")
         command.extend(
             (
                 "--mount",
-                f"type=bind,src={output_directory},dst=/output",
+                f"type=bind,src={output_path},dst=/output/{portable_output.name}",
             )
         )
     command.extend((target.image, *target.command))
@@ -396,9 +401,13 @@ def run_container_target(
     if target.output_file is not None:
         output_directory = workspace / "output"
         output_directory.mkdir()
-        if os.name != "nt":
-            output_directory.chmod(0o733)
         output_path = _output_path(output_directory, target.output_file)
+        if output_path is None:
+            raise RuntimeError("container output path was not created")
+        with output_path.open("xb"):
+            pass
+        if os.name != "nt":
+            output_path.chmod(0o666)
     command = build_docker_command(target, workspace=workspace, policy=policy)
     try:
         process = run_bounded_process(

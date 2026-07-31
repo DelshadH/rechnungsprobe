@@ -275,7 +275,7 @@ def _directory_usage(root: Path, scan_limit: int) -> tuple[int, int, bool]:
         try:
             entries = tuple(os.scandir(directory))
         except OSError:
-            continue
+            return total_bytes, entry_count, True
         for entry in entries:
             entry_count += 1
             if entry_count > scan_limit:
@@ -293,7 +293,7 @@ def _directory_usage(root: Path, scan_limit: int) -> tuple[int, int, bool]:
                 elif entry.is_file(follow_symlinks=False):
                     total_bytes += metadata.st_size
             except OSError:
-                continue
+                return total_bytes, entry_count, True
     return total_bytes, entry_count, False
 
 
@@ -327,7 +327,9 @@ def run_bounded_process(
     ):
         raise SecurityError("invalid process resource policy")
 
-    baseline_bytes, baseline_files, _ = _directory_usage(cwd, 100_000)
+    baseline_bytes, baseline_files, baseline_scan_failed = _directory_usage(cwd, 100_000)
+    if baseline_scan_failed:
+        raise SecurityError("process workspace cannot be inspected safely")
     creationflags = 0
     if os.name == "nt":
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW

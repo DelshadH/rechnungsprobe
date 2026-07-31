@@ -91,6 +91,19 @@ def test_manifest_records_a_stable_root_hash_and_interaction_coverage() -> None:
     assert corpus_manifest(tuple(reversed(candidates))) == corpus_manifest(candidates)
 
 
+def test_interaction_buckets_cover_all_distinct_ordered_pairs() -> None:
+    expected = {
+        f"{primary}+{secondary}"
+        for primary in MUTATORS
+        for secondary in MUTATORS
+        if primary != secondary
+    }
+
+    assert len(INTERACTION_BUCKETS) == 380
+    assert set(INTERACTION_BUCKETS) == expected
+    assert any(bucket.endswith("+invoice-id") for bucket in INTERACTION_BUCKETS)
+
+
 @pytest.mark.parametrize(
     ("shard_index", "shard_count"),
     [(-1, 2), (2, 2), (0, 0), (0, 101)],

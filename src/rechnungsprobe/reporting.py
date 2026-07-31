@@ -60,6 +60,8 @@ class FindingRecord:
         return "synthetic" if self.synthetic else "real"
 
     def __post_init__(self) -> None:
+        if not self.synthetic and self.provenance is None:
+            raise SecurityError("real finding record requires provenance")
         text_values = (
             self.case_id,
             self.predicate,
@@ -82,6 +84,18 @@ class FindingRecord:
             or not 1 <= self.reproductions <= 100
         ):
             raise SecurityError("finding record is invalid or exceeds its limits")
+        if self.provenance is not None and (
+            self.provenance.target_digest != self.target_digest
+            or self.provenance.profile.get("identifier") != self.profile_id
+            or len(self.provenance.observations) != self.reproductions
+            or self.provenance.minimization.one_minimal != self.one_minimal
+            or any(
+                observation.termination != self.termination
+                or observation.returncode != self.returncode
+                for observation in self.provenance.observations
+            )
+        ):
+            raise SecurityError("finding record and provenance disagree")
 
 
 def _record_payload(record: FindingRecord) -> dict[str, object]:

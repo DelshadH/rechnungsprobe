@@ -9,9 +9,10 @@ matching failure to a still-valid 1-minimal reproduction under declared
 operations.
 
 Version `0.1.0a1` is a technically reviewed alpha candidate. The recorded
-research gate validated 10,000 unique semantic fingerprints and retained three
-real findings across three of five open-source importer adapters. Finding
-details remain anonymized before maintainer notification. Rechnungsprobe does
+research gate validated 10,000 unique semantic fingerprints and locally
+retained three private compatibility observations across three of five
+open-source importer adapters. Public commitments do not independently
+substantiate them; details remain private before maintainer notification. Rechnungsprobe does
 not establish tax, legal, accounting, or general compliance correctness.
 
 ## Requirements

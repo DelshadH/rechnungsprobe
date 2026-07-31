@@ -12,14 +12,14 @@ from rechnungsprobe.profiles import XRECHNUNG_UBL_3_0_2
 from rechnungsprobe.security import SecurityError, open_regular_file
 from rechnungsprobe.xmlsafe import load_xml
 
-GENERATOR_VERSION = "1"
+GENERATOR_VERSION = "2"
 MUTATOR_VERSION = "1"
 MUTATOR_ORDER = tuple(MUTATORS)
 INTERACTION_BUCKETS = tuple(
     f"{primary}+{secondary}"
     for primary in MUTATOR_ORDER
     for secondary in MUTATOR_ORDER
-    if secondary not in {primary, "invoice-id"}
+    if secondary != primary
 )
 
 
@@ -82,17 +82,19 @@ def generate_candidates(
 
         if index >= len(MUTATOR_ORDER):
             interaction_names = tuple(
-                name
-                for name in MUTATOR_ORDER
-                if name not in {primary_name, "invoice-id"}
+                name for name in MUTATOR_ORDER if name != primary_name
             )
             interaction_cycle = (index - len(MUTATOR_ORDER)) // len(MUTATOR_ORDER)
             interaction_name = interaction_names[interaction_cycle % len(interaction_names)]
-            interaction_token = int.from_bytes(digest[16:24], "big") % 1_000_000_000
+            interaction_token = (
+                unique_token
+                if interaction_name == "invoice-id"
+                else int.from_bytes(digest[16:24], "big") % 1_000_000_000
+            )
             invoice = mutate(invoice, interaction_name, token=interaction_token)
             operations.append(MutationRecord(interaction_name, interaction_token))
 
-        if primary_name != "invoice-id":
+        if all(operation.name != "invoice-id" for operation in operations):
             invoice = mutate(invoice, "invoice-id", token=unique_token)
             operations.append(MutationRecord("invoice-id", unique_token))
 

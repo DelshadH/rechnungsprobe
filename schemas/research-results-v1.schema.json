@@ -8,7 +8,7 @@
     "findings": {"items": {"additionalProperties": false, "properties": {"capsule_sha256": {"pattern": "^[0-9a-f]{64}$", "type": "string"}, "evidence_id": {"pattern": "^RP-[0-9]{4}-[0-9]{3}$", "type": "string"}, "finding_kind": {"type": "string"}, "one_minimal": {"type": "boolean"}, "reproductions": {"minimum": 1, "type": "integer"}}, "required": ["capsule_sha256", "evidence_id", "finding_kind", "one_minimal", "reproductions"], "type": "object"}, "type": "array"},
     "profile_id": {"type": "string"},
     "schema": {"const": "https://rechnungsprobe.dev/schemas/research-results-v1"},
-    "status": {"const": "passed"}
+    "status": {"enum": ["passed", "private-evidence"]}
   },
   "required": ["corpus_gate", "finding_count", "findings", "profile_id", "schema", "status"],
   "type": "object"

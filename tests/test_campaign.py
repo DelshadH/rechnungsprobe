@@ -175,6 +175,63 @@ def test_campaign_officially_validates_roundtrip_output_before_matching(
     assert report["findings"][0]["details"] == ["synthetic invalid output"]
 
 
+def test_campaign_shrinking_preserves_the_exact_failure_signature(
+    tmp_path: Path,
+) -> None:
+    def validator(
+        cases: Mapping[str, bytes],
+        _workspace: Path,
+    ) -> dict[str, ValidationResult]:
+        for invoice_xml in cases.values():
+            parse_invoice(invoice_xml)
+        return {
+            case_id: ValidationResult(
+                valid=True,
+                profile_id=XRECHNUNG_UBL_3_0_2.identifier,
+                exit_code=0,
+                errors=(),
+                report_sha256="a" * 64,
+            )
+            for case_id in cases
+        }
+
+    def runner(
+        _target: CampaignTarget,
+        invoice_xml: bytes,
+        _workspace: Path,
+        _policy: ProcessPolicy,
+    ) -> TargetResult:
+        return TargetResult(
+            process=ProcessResult(
+                termination="exited",
+                returncode=23 if b"#ADU#" in invoice_xml else 42,
+                stdout=b"",
+                stderr=b"",
+            ),
+            output_xml=None,
+            target_digest="sha256:" + "b" * 64,
+        )
+
+    result = run_campaign(
+        output_path=tmp_path / "campaign",
+        count=1,
+        campaign_seed=7,
+        target=LocalTarget(command=("synthetic-importer",), input_mode="stdin"),
+        predicate=CrashPredicate(),
+        policy=ProcessPolicy(),
+        reproductions=2,
+        validator=validator,
+        runner=runner,
+    )
+
+    assert result.finding_count == 1
+    verified = verify_finding_capsule(
+        tmp_path / "campaign" / "case-000000.rechnungsprobe"
+    )
+    assert verified.record.returncode == 23
+    assert b"#ADU#" in verified.invoice_xml
+
+
 def test_campaign_capsule_records_resolved_local_target_files(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
