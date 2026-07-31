@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+import base64
+import binascii
+import hashlib
+import hmac
+import json
 import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from xml.etree import ElementTree  # nosec B405
 
 from rechnungsprobe.process import ProcessPolicy, ProcessResult, run_bounded_process
 from rechnungsprobe.profiles import XRECHNUNG_UBL_3_0_2, Profile, materialize_profile
@@ -35,7 +41,20 @@ def _local_name(tag: str) -> str:
     return tag.rsplit("}", 1)[-1]
 
 
-def _report_errors(report_path: Path) -> tuple[tuple[str, ...], str]:
+def _semantic_element(element: ElementTree.Element) -> object:
+    return {
+        "attributes": sorted(element.attrib.items()),
+        "children": [_semantic_element(child) for child in element],
+        "tag": _local_name(element.tag),
+        "text": " ".join((element.text or "").split()),
+    }
+
+
+def _report_errors(
+    report_path: Path,
+    *,
+    expected_document_sha256: str,
+) -> tuple[tuple[str, ...], str]:
     document = load_xml(
         report_path,
         XmlLimits(
@@ -46,6 +65,24 @@ def _report_errors(report_path: Path) -> tuple[tuple[str, ...], str]:
         ),
     )
     errors: list[str] = []
+    algorithms = [
+        " ".join("".join(element.itertext()).split())
+        for element in document.root.iter()
+        if _local_name(element.tag) == "hashAlgorithm"
+    ]
+    values = [
+        "".join("".join(element.itertext()).split())
+        for element in document.root.iter()
+        if _local_name(element.tag) == "hashValue"
+    ]
+    if algorithms != ["SHA-256"] or len(values) != 1:
+        raise SecurityError("validator report lacks one SHA-256 document digest")
+    try:
+        reported_digest = base64.b64decode(values[0], validate=True)
+    except (ValueError, binascii.Error) as error:
+        raise SecurityError("validator report has an invalid document digest") from error
+    if not hmac.compare_digest(reported_digest, bytes.fromhex(expected_document_sha256)):
+        raise SecurityError("validator report document digest does not match its input")
     for element in document.root.iter():
         if _local_name(element.tag) not in {"assertion", "message"}:
             continue
@@ -53,7 +90,23 @@ def _report_errors(report_path: Path) -> tuple[tuple[str, ...], str]:
         if flag in {"fatal", "error"}:
             text = " ".join("".join(element.itertext()).split())
             errors.append(text[:1000])
-    return tuple(errors), document.sha256
+    validation_steps = [
+        _semantic_element(element)
+        for element in document.root.iter()
+        if _local_name(element.tag) == "validationStepResult"
+    ]
+    semantic_report = {
+        "document_sha256": expected_document_sha256,
+        "report_valid": document.root.attrib.get("valid"),
+        "validation_steps": validation_steps,
+    }
+    encoded = json.dumps(
+        semantic_report,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return tuple(errors), hashlib.sha256(encoded).hexdigest()
 
 
 def _failure_results(
@@ -194,7 +247,10 @@ def validate_invoices(
     results: dict[str, ValidationResult] = {}
     for case_id in case_ids:
         try:
-            errors, report_sha256 = _report_errors(expected_reports[case_id])
+            errors, report_sha256 = _report_errors(
+                expected_reports[case_id],
+                expected_document_sha256=documents[case_id].sha256,
+            )
         except SecurityError as error:
             results[case_id] = ValidationResult(
                 valid=False,

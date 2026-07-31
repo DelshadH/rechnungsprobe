@@ -105,7 +105,7 @@ def run_corpus_gate(
     if interactions_covered != set(INTERACTION_BUCKETS):
         raise SecurityError("corpus gate does not cover every declared interaction bucket")
 
-    validation_root = hashlib.sha256(b"rechnungsprobe-validation-root-v1\0")
+    validation_root = hashlib.sha256(b"rechnungsprobe-validation-root-v2\0")
     with TemporaryDirectory(prefix="rp-corpus-gate-") as temporary:
         workspace_root = Path(temporary)
         for offset in range(0, len(candidates), 64):
@@ -119,12 +119,22 @@ def run_corpus_gate(
                 raise SecurityError("validator returned an unexpected corpus gate result set")
             for case_id in sorted(results):
                 result = results[case_id]
+                candidate = next(
+                    candidate
+                    for candidate in batch_candidates
+                    if f"case-{candidate.index:06d}" == case_id
+                )
                 if not result.valid or result.profile_id != XRECHNUNG_UBL_3_0_2.identifier:
                     detail = "; ".join(result.errors) or "official validation failed"
                     raise SecurityError(f"{case_id} failed the corpus gate: {detail}")
                 if result.report_sha256 is None or len(result.report_sha256) != 64:
                     raise SecurityError("validator result lacks a bounded report digest")
                 validation_root.update(case_id.encode("ascii"))
+                validation_root.update(bytes.fromhex(candidate.xml_sha256))
+                validation_root.update(result.profile_id.encode("utf-8"))
+                validation_root.update(result.exit_code.to_bytes(4, "big", signed=True))
+                for error in result.errors:
+                    validation_root.update(error.encode("utf-8"))
                 validation_root.update(bytes.fromhex(result.report_sha256))
 
     recorded_environment = dict(environment or _environment_record())

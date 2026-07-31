@@ -15,6 +15,7 @@ from rechnungsprobe.predicates import CrashPredicate, OutputValidityPredicate
 from rechnungsprobe.process import ProcessPolicy, ProcessResult
 from rechnungsprobe.profiles import XRECHNUNG_UBL_3_0_2
 from rechnungsprobe.reporting import finding_record_from_payload
+from rechnungsprobe.security import SecurityError
 from rechnungsprobe.target import LocalTarget, TargetResult
 from rechnungsprobe.validate import ValidationResult
 
@@ -230,6 +231,74 @@ def test_campaign_shrinking_preserves_the_exact_failure_signature(
     )
     assert verified.record.returncode == 23
     assert b"#ADU#" in verified.invoice_xml
+
+
+def test_campaign_rejects_nondeterministic_final_output_observations(
+    tmp_path: Path,
+) -> None:
+    outputs = (b"<Invoice/>", b"<Invoice ></Invoice>")
+    calls = 0
+
+    def validator(
+        cases: Mapping[str, bytes],
+        _workspace: Path,
+    ) -> dict[str, ValidationResult]:
+        results: dict[str, ValidationResult] = {}
+        for case_id, invoice_xml in cases.items():
+            if invoice_xml in outputs:
+                results[case_id] = ValidationResult(
+                    valid=False,
+                    profile_id=XRECHNUNG_UBL_3_0_2.identifier,
+                    exit_code=0,
+                    errors=("same invalid output",),
+                    report_sha256="c" * 64,
+                )
+            else:
+                parse_invoice(invoice_xml)
+                results[case_id] = ValidationResult(
+                    valid=True,
+                    profile_id=XRECHNUNG_UBL_3_0_2.identifier,
+                    exit_code=0,
+                    errors=(),
+                    report_sha256="a" * 64,
+                )
+        return results
+
+    def runner(
+        _target: CampaignTarget,
+        _invoice_xml: bytes,
+        _workspace: Path,
+        _policy: ProcessPolicy,
+    ) -> TargetResult:
+        nonlocal calls
+        output = outputs[calls % len(outputs)]
+        calls += 1
+        return TargetResult(
+            process=ProcessResult(
+                termination="exited",
+                returncode=0,
+                stdout=output,
+                stderr=b"",
+            ),
+            output_xml=output,
+            target_digest="sha256:" + "d" * 64,
+        )
+
+    with pytest.raises(SecurityError, match="byte-deterministic"):
+        run_campaign(
+            output_path=tmp_path / "campaign",
+            count=1,
+            campaign_seed=7,
+            target=LocalTarget(
+                command=("synthetic-importer",),
+                input_mode="stdin",
+                output_file="roundtrip.xml",
+            ),
+            predicate=OutputValidityPredicate(),
+            reproductions=2,
+            validator=validator,
+            runner=runner,
+        )
 
 
 def test_campaign_capsule_records_resolved_local_target_files(

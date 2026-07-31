@@ -18,7 +18,7 @@ newer versions or hosted services.
 - Corpus root:
   `sha256:bfe4b154a8d8d2d2776b8cd85f45d613c3e17ed7630711f96d35448470a624c7`.
 - Validation root:
-  `sha256:5b3b0d9518f570a5f8f33c06bbee9a72e5bca43722faf50379c73d871444f9ba`.
+  `sha256:d45bde3dd0eae2182560173ef0b6fb1a4c36c7d398aa3c774efa992ec2651e88`.
 
 The machine-readable environment, artifact hashes, coverage, and roots are in
 `research/evidence/corpus-gate.json`.

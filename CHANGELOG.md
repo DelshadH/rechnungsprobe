@@ -25,3 +25,6 @@ All notable changes will be recorded here.
 - Added clean-root reproducible builds, exact-SHA successful-CI release gating,
   least-privilege split publication jobs, package-member inventory, and SBOM
   coverage for bundled validation artifacts.
+- Hash normalized validation-report semantics rather than volatile KoSIT
+  timestamps and workspace paths.
+- Reject nondeterministic complete observations during final reproduction.

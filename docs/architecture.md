@@ -40,7 +40,7 @@
    one frontier may share a KoSIT batch; target evaluations remain ordered and
    uncached.
 6. Independently check 1-minimality, then revalidate and reproduce the reduced
-   case the requested number of times.
+   case the requested number of times with byte-identical complete observations.
 7. Export canonical reports and a deterministic finding capsule.
 
 The campaign currently stops after its first stable finding. This keeps

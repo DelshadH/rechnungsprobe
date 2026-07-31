@@ -59,6 +59,9 @@ rechnungsprobe corpus-gate \
 Corpus generation is deterministic, resumable, and shardable through the Python
 API. A corpus gate records the corpus root, validation root, mutator and
 interaction coverage, profile identity, and execution environment.
+The validation root binds each invoice digest and outcome to a normalized KoSIT
+semantic-report digest; volatile report timestamps and workspace paths are
+excluded.
 
 ## Test a digest-pinned container
 

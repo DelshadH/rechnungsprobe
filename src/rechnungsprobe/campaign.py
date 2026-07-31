@@ -434,7 +434,12 @@ def run_campaign(
                     != initial_signature
                 ):
                     raise SecurityError("exact finding signature did not reproduce")
-                observations.append(observation_from_result(final_result))
+                observation = observation_from_result(final_result)
+                if observations and observation != observations[0]:
+                    raise SecurityError(
+                        "final reproduction observations were not byte-deterministic"
+                    )
+                observations.append(observation)
             if final_result is None or final_evaluation is None:
                 raise RuntimeError("reproduction loop produced no target result")
             record = _finding_record(

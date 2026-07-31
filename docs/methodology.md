@@ -10,6 +10,16 @@ seed, ordered mutation history, profile and artifact hashes, target
 configuration digest, resource policy, observation hashes, reproduction count,
 and minimization proof.
 
+Final reproductions require byte-identical complete observations, including
+standard-output, standard-error, and importer-output hashes. During shrinking,
+the predicate-specific signature may be narrower because candidate-dependent
+output is expected while testing smaller invoices.
+
+Corpus validation roots bind case identifiers, invoice SHA-256 digests, profile
+identity, exit status, errors, and a normalized semantic digest of the KoSIT
+report. Volatile report timestamps, workspace paths, and rendered assessment
+HTML are excluded from that digest.
+
 Reduction is deterministic greedy 1-minimization under
 `invoice-node-value-v1`. Independent candidates in one reduction frontier may
 be validated in one KoSIT batch, but target predicates are evaluated in the
