@@ -11,7 +11,7 @@ import time
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal, cast
 
 import psutil
 
@@ -159,7 +159,7 @@ class _ProcessContainment:
                 ("PeakJobMemoryUsed", ctypes.c_size_t),
             ]
 
-        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32 = cast(Any, ctypes).WinDLL("kernel32", use_last_error=True)
         kernel32.CreateJobObjectW.restype = wintypes.HANDLE
         kernel32.CreateJobObjectW.argtypes = (ctypes.c_void_p, wintypes.LPCWSTR)
         kernel32.SetInformationJobObject.argtypes = (
@@ -209,7 +209,7 @@ class _ProcessContainment:
                     ("TotalTerminatedProcesses", wintypes.DWORD),
                 ]
 
-            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32 = cast(Any, ctypes).WinDLL("kernel32", use_last_error=True)
             kernel32.TerminateJobObject.argtypes = (wintypes.HANDLE, wintypes.UINT)
             kernel32.QueryInformationJobObject.argtypes = (
                 wintypes.HANDLE,
@@ -284,7 +284,7 @@ def _directory_usage(root: Path, scan_limit: int) -> tuple[int, int, bool]:
                 metadata = entry.stat(follow_symlinks=False)
                 if entry.is_symlink() or (
                     os.name == "nt"
-                    and metadata.st_file_attributes
+                    and getattr(metadata, "st_file_attributes", 0)
                     & stat.FILE_ATTRIBUTE_REPARSE_POINT
                 ):
                     return total_bytes, entry_count, True
@@ -332,7 +332,11 @@ def run_bounded_process(
         raise SecurityError("process workspace cannot be inspected safely")
     creationflags = 0
     if os.name == "nt":
-        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+        platform_subprocess = cast(Any, subprocess)
+        creationflags = (
+            platform_subprocess.CREATE_NEW_PROCESS_GROUP
+            | platform_subprocess.CREATE_NO_WINDOW
+        )
     # Arguments were validated above and the shell remains disabled.
     process = subprocess.Popen(  # nosec B603
         arguments,

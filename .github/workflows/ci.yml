@@ -33,7 +33,10 @@ jobs:
           subprocess.check_call([sys.executable,'-m','pip','install','--no-deps',glob.glob('dist/*.whl')[0]])"
       - run: python -m pytest
       - run: python -m ruff check .
-      - run: python -m mypy
+      - name: Type-check both platform branches
+        run: |
+          python -m mypy --platform linux
+          python -m mypy --platform win32
       - name: Smoke-test the installed wheel outside the checkout
         run: >-
           python -c "import os,subprocess,sys,tempfile;
