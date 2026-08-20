@@ -9,6 +9,7 @@ from pathlib import Path
 import psutil
 import pytest
 
+from rechnungsprobe import process
 from rechnungsprobe.process import ProcessPolicy, run_bounded_process
 from rechnungsprobe.security import SecurityError
 
@@ -89,6 +90,55 @@ def test_bounded_process_stops_file_output_flood(tmp_path: Path) -> None:
     )
 
     assert result.termination == "file_limit"
+
+
+def test_directory_usage_retries_a_file_that_vanishes_during_scan(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    payload = tmp_path / "payload.bin"
+    payload.write_bytes(b"abc")
+    real_scandir = process.os.scandir
+    first_scan = True
+
+    class VanishingEntry:
+        def __init__(self, entry: os.DirEntry[str]) -> None:
+            self._entry = entry
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(self._entry, name)
+
+        def stat(self, *, follow_symlinks: bool = True) -> os.stat_result:
+            raise FileNotFoundError(self._entry.path)
+
+    def transient_scandir(path: object) -> object:
+        nonlocal first_scan
+        entries = tuple(real_scandir(path))  # type: ignore[arg-type]
+        if first_scan:
+            first_scan = False
+            return (VanishingEntry(entries[0]),)
+        return entries
+
+    monkeypatch.setattr(process.os, "scandir", transient_scandir)
+
+    assert process._directory_usage(tmp_path, 10) == (3, 1, False)
+
+
+def test_directory_usage_fails_closed_during_persistent_path_churn(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    attempts = 0
+
+    def vanished(_path: object) -> object:
+        nonlocal attempts
+        attempts += 1
+        raise FileNotFoundError("synthetic persistent churn")
+
+    monkeypatch.setattr(process.os, "scandir", vanished)
+
+    assert process._directory_usage(tmp_path, 10) == (0, 0, True)
+    assert attempts == 3
 
 
 def test_bounded_process_does_not_inherit_secrets(

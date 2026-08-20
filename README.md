@@ -139,6 +139,7 @@ or security error.
 - [Methodology](docs/methodology.md)
 - [Security model](docs/security-model.md)
 - [Finding format](docs/finding-format.md)
+- [Responsible disclosure](docs/disclosure.md)
 - [Compatibility policy](docs/compatibility.md)
 - [Quality plan](docs/quality-plan.md)
 

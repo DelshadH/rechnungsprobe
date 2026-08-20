@@ -56,6 +56,7 @@ _INHERITED_ENVIRONMENT = (
     "SYSTEMROOT",
     "WINDIR",
 )
+_DIRECTORY_SCAN_ATTEMPTS = 3
 
 
 def _clean_environment(
@@ -267,34 +268,46 @@ def _resource_termination(root: psutil.Process, policy: ProcessPolicy) -> Termin
 
 
 def _directory_usage(root: Path, scan_limit: int) -> tuple[int, int, bool]:
-    total_bytes = 0
-    entry_count = 0
-    pending = [root]
-    while pending:
-        directory = pending.pop()
+    # A process may remove a temporary entry after scandir() returns it but
+    # before stat(). Retry a bounded number of complete snapshots for that one
+    # race; every other inspection failure remains fail-closed.
+    for _attempt in range(_DIRECTORY_SCAN_ATTEMPTS):
+        total_bytes = 0
+        entry_count = 0
+        pending = [root]
         try:
-            entries = tuple(os.scandir(directory))
-        except OSError:
-            return total_bytes, entry_count, True
-        for entry in entries:
-            entry_count += 1
-            if entry_count > scan_limit:
-                return total_bytes, entry_count, True
-            try:
-                metadata = entry.stat(follow_symlinks=False)
-                if entry.is_symlink() or (
-                    os.name == "nt"
-                    and getattr(metadata, "st_file_attributes", 0)
-                    & stat.FILE_ATTRIBUTE_REPARSE_POINT
-                ):
+            while pending:
+                directory = pending.pop()
+                try:
+                    entries = tuple(os.scandir(directory))
+                except FileNotFoundError:
+                    raise
+                except OSError:
                     return total_bytes, entry_count, True
-                if entry.is_dir(follow_symlinks=False):
-                    pending.append(Path(entry.path))
-                elif entry.is_file(follow_symlinks=False):
-                    total_bytes += metadata.st_size
-            except OSError:
-                return total_bytes, entry_count, True
-    return total_bytes, entry_count, False
+                for entry in entries:
+                    entry_count += 1
+                    if entry_count > scan_limit:
+                        return total_bytes, entry_count, True
+                    try:
+                        metadata = entry.stat(follow_symlinks=False)
+                        if entry.is_symlink() or (
+                            os.name == "nt"
+                            and getattr(metadata, "st_file_attributes", 0)
+                            & stat.FILE_ATTRIBUTE_REPARSE_POINT
+                        ):
+                            return total_bytes, entry_count, True
+                        if entry.is_dir(follow_symlinks=False):
+                            pending.append(Path(entry.path))
+                        elif entry.is_file(follow_symlinks=False):
+                            total_bytes += metadata.st_size
+                    except FileNotFoundError:
+                        raise
+                    except OSError:
+                        return total_bytes, entry_count, True
+            return total_bytes, entry_count, False
+        except FileNotFoundError:
+            continue
+    return 0, 0, True
 
 
 def run_bounded_process(

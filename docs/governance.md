@@ -10,4 +10,5 @@ changelog entry. No branch rule may permit force pushes or deletion of the
 canonical branch or protected release tags.
 
 Responsible disclosure takes precedence over benchmark completeness. Findings
-may remain anonymized without blocking an alpha release.
+may remain anonymized without blocking an alpha release. The private handoff
+requirements are defined in [disclosure.md](disclosure.md).

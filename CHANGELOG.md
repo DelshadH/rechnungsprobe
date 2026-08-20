@@ -28,3 +28,10 @@ All notable changes will be recorded here.
 - Hash normalized validation-report semantics rather than volatile KoSIT
   timestamps and workspace paths.
 - Reject nondeterministic complete observations during final reproduction.
+- Retry bounded workspace accounting only when an entry vanishes during a
+  concurrent scan; persistent churn and all other inspection failures remain
+  fail-closed.
+- Update Hatchling with a regenerated hash lock and pin reviewed attestation,
+  artifact-upload, and PyPI publication actions to verified upstream commits.
+- Document the private maintainer-disclosure handoff without publishing importer
+  mappings or finding capsules.
