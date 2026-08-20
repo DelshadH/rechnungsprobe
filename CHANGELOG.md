@@ -31,7 +31,7 @@ All notable changes will be recorded here.
 - Retry bounded workspace accounting only when an entry vanishes during a
   concurrent scan; persistent churn and all other inspection failures remain
   fail-closed.
-- Update Hatchling with a regenerated hash lock and pin reviewed attestation,
+- Update Hatchling to 1.32.0 with a regenerated hash lock and pin reviewed attestation,
   artifact-upload, and PyPI publication actions to verified upstream commits.
 - Document the private maintainer-disclosure handoff without publishing importer
   mappings or finding capsules.
