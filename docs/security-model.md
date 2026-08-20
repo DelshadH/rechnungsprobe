@@ -20,6 +20,10 @@ untrusted.
 - Target input, combined output, process count, CPU, memory, elapsed time,
   created files, and file growth are bounded. Output XML must be a bounded
   regular file below the target workspace, with no linked path components.
+- Workspace accounting retries a complete snapshot only when a temporary entry
+  disappears between directory enumeration and metadata inspection. The retry
+  count is fixed; persistent churn, unreadable entries, links, and scan overflow
+  still terminate fail-closed.
 - Local target temporary-directory variables point into the disposable
   workspace. Existing executable/script arguments are resolved and hashed before
   the target changes directory and regular-file arguments are copied and

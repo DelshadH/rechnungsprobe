@@ -58,10 +58,11 @@ not release assets or Python package data.
 
 Jasy reported no npm advisories. Both Composer graphs reported no advisories or
 abandoned packages. Esvit's dependency graph includes
-GHSA-gh4j-gqv2-49f6, a moderate XML-builder injection advisory with no upstream
-fix available for that package version. Rechnungsprobe exercises only its
+GHSA-gh4j-gqv2-49f6, a moderate XML-builder injection advisory. Its first
+patched release is the incompatible `fast-xml-parser` 5.7.0 major, outside
+`einvoicing` 0.0.3's declared 4.x range. Rechnungsprobe exercises only the
 reader, in a networkless read-only container, but the advisory remains a stated
-research-target limitation rather than being suppressed.
+research-target limitation rather than being suppressed or overridden.
 
 ## Limitations
 

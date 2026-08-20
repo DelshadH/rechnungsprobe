@@ -54,3 +54,16 @@ workflow, perform the OIDC registry upload, and create the GitHub release. A
 The technical candidate is ready when every release-candidate gate above is
 checked. Readiness does not authorize a tag, GitHub release, or registry
 publication.
+
+## Importer-disclosure gate
+
+- [x] The public tree contains only anonymized commitments and a documented
+  private handoff process; capsules and importer mappings are excluded from
+  source, package data, and release assets.
+- [ ] Before any importer-linked contact or public finding, the owner verifies
+  custody of the private mapping and capsule against `research/results.json`,
+  repeats the clean digest-pinned replay, and selects the maintainer's private
+  contact path.
+
+The unchecked item blocks importer-linked disclosure, not an anonymized alpha
+publication. See [disclosure.md](disclosure.md).
