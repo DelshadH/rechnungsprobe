@@ -6,7 +6,6 @@ import hmac
 import json
 import stat
 import tarfile
-import uuid
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -180,6 +179,8 @@ def inventory(dist: Path, output: Path) -> None:
 
 
 def augment_sbom(path: Path) -> None:
+    import uuid
+
     document: dict[str, Any] = json.loads(path.read_bytes())
     profile = json.loads(Path("src/rechnungsprobe/data/profile.json").read_bytes())
     components = document.setdefault("components", [])
