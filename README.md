@@ -8,7 +8,7 @@ with pinned official KoSIT artifacts, runs a declared importer, and reduces a
 matching failure to a still-valid 1-minimal reproduction under declared
 operations.
 
-Version `0.1.0a1` is a technically reviewed alpha candidate. The recorded
+Version `0.1.0a2` is a technically reviewed alpha candidate. The recorded
 research gate validated 10,000 unique semantic fingerprints and locally
 retained three private compatibility observations across three of five
 open-source importer adapters. Public commitments do not independently
@@ -31,7 +31,7 @@ verified offline before use.
 After the owner-authorized publication:
 
 ```bash
-python -m pip install rechnungsprobe==0.1.0a1
+python -m pip install rechnungsprobe==0.1.0a2
 rechnungsprobe --version
 ```
 

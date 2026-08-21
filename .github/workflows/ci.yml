@@ -77,6 +77,20 @@ jobs:
           twine check dist/*
           mkdir release
           python tools/release_artifacts.py inventory dist release/package-inventory.json
+      - name: Preflight the release SBOM and attestation format
+        run: |
+          python -m venv --without-pip .sbom-venv
+          python -m pip --python .sbom-venv/bin/python install --require-hashes -r requirements/runtime.txt
+          python -m pip --python .sbom-venv/bin/python install --no-deps dist/*.whl
+          cyclonedx-py environment .sbom-venv/bin/python \
+            --pyproject pyproject.toml \
+            --mc-type application \
+            --spec-version 1.6 \
+            --output-reproducible \
+            --output-format JSON \
+            --output-file release/rechnungsprobe.cdx.json
+          python tools/release_artifacts.py augment-sbom release/rechnungsprobe.cdx.json
+          python tools/release_artifacts.py validate-sbom release/rechnungsprobe.cdx.json
       - name: Require approved runtime licenses
         run: |
           python -m venv --without-pip .runtime-license
