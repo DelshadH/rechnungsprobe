@@ -40,7 +40,7 @@ def test_version_reports_the_release_candidate_version(
         main(["--version"])
 
     assert completed.value.code == 0
-    assert capsys.readouterr().out == "rechnungsprobe 0.1.0a1\n"
+    assert capsys.readouterr().out == "rechnungsprobe 0.1.0a2\n"
 
 
 def test_verify_command_checks_a_real_capsule(

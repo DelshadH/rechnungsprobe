@@ -16,6 +16,11 @@ a separate post-publication job receives only `contents: write` to create the
 matching GitHub release. It rebuilds at the tag, attests exact artifacts, and
 publishes to PyPI through trusted publishing.
 
+Normal CI generates the same reproducible CycloneDX document used by the release
+workflow. The preflight requires a deterministic content-derived `serialNumber`
+in addition to strict CycloneDX 1.6 validity because GitHub's SBOM attestation
+parser requires that identity field.
+
 Creating the tag, GitHub release, or PyPI publication requires the owner's final
 `PUBLISH` decision. Preparing and reviewing the workflow does not grant that
 authority.

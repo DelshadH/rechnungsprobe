@@ -1,4 +1,4 @@
-# Rechnungsprobe 0.1.0a1 benchmark
+# Rechnungsprobe 0.1.0a2 benchmark
 
 ## Scope
 

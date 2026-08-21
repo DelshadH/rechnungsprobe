@@ -38,7 +38,35 @@ def test_sbom_augmentation_records_every_bundled_validation_artifact(
     }
     assert all(component["hashes"][0]["alg"] == "SHA-256" for component in components)
     assert all(component["externalReferences"][0]["url"] for component in components)
+    serial_number = payload["serialNumber"]
+    assert serial_number.startswith("urn:uuid:")
     validate_sbom(path)
+    augment_sbom(path)
+    assert json.loads(path.read_bytes())["serialNumber"] == serial_number
+    payload["version"] = 2
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    augment_sbom(path)
+    assert json.loads(path.read_bytes())["serialNumber"] != serial_number
+
+
+def test_sbom_validation_rejects_document_that_github_cannot_attest(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "sbom.json"
+    path.write_text(
+        json.dumps(
+            {
+                "bomFormat": "CycloneDX",
+                "components": [],
+                "specVersion": "1.6",
+                "version": 1,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="serialNumber"):
+        validate_sbom(path)
 
 
 def test_sbom_augmentation_rejects_invalid_component_shape(tmp_path: Path) -> None:

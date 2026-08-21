@@ -2,7 +2,10 @@
 
 All notable changes will be recorded here.
 
-## 0.1.0a1 - Unreleased
+## 0.1.0a2 - Unreleased
+
+- Add a deterministic content-derived CycloneDX serial number and run the exact
+  SBOM attestation-format preflight in normal CI.
 
 - Added deterministic, resumable, shardable corpus generation and a recorded
   10,000-fingerprint official-validation gate.
@@ -35,3 +38,9 @@ All notable changes will be recorded here.
   artifact-upload, and PyPI publication actions to verified upstream commits.
 - Document the private maintainer-disclosure handoff without publishing importer
   mappings or finding capsules.
+
+## 0.1.0a1 - Not published
+
+- The immutable release tag was created, but publication stopped before artifact
+  upload, PyPI, or GitHub release creation when the SBOM attestation preflight
+  rejected the reproducible CycloneDX document.

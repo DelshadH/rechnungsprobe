@@ -6,6 +6,7 @@ import hmac
 import json
 import stat
 import tarfile
+import uuid
 import zipfile
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -212,6 +213,20 @@ def augment_sbom(path: Path) -> None:
     refs = {component.get("bom-ref") for component in components if isinstance(component, dict)}
     components.extend(component for component in additions if component["bom-ref"] not in refs)
     components.sort(key=lambda component: str(component.get("bom-ref", "")))
+    identity = dict(document)
+    identity.pop("serialNumber", None)
+    identity_digest = _sha256(
+        json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    )
+    document["serialNumber"] = (
+        "urn:uuid:"
+        + str(
+            uuid.uuid5(
+                uuid.NAMESPACE_URL,
+                f"https://rechnungsprobe.dev/sbom/{identity_digest}",
+            )
+        )
+    )
     path.write_text(
         json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n",
         encoding="utf-8",
@@ -229,6 +244,14 @@ def validate_sbom(path: Path) -> None:
     if errors is not None:
         messages = tuple(str(error) for error in errors)
         raise ValueError("invalid CycloneDX SBOM: " + "; ".join(messages[:10]))
+    document: dict[str, Any] = json.loads(path.read_bytes())
+    required_for_attestation = ("bomFormat", "serialNumber", "specVersion")
+    missing = tuple(field for field in required_for_attestation if not document.get(field))
+    if missing:
+        raise ValueError(
+            "CycloneDX SBOM is incompatible with GitHub attestation; missing "
+            + ", ".join(missing)
+        )
 
 
 def main() -> None:

@@ -13,7 +13,7 @@ importer accept and preserve the valid invoices it may encounter?”
 
 ## Current alpha candidate
 
-The `0.1.0a1` candidate supports XRechnung 3.0.2 UBL Invoice with KoSIT
+The `0.1.0a2` candidate supports XRechnung 3.0.2 UBL Invoice with KoSIT
 validator 1.6.2 and configuration 2026-01-31. It includes:
 
 - one licensed official seed, 20 typed mutators, and all 380 ordered two-mutator
