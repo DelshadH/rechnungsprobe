@@ -10,6 +10,6 @@ pip-audit==2.10.1
 pip-licenses==5.5.5
 psutil==7.2.2
 pytest==9.1.1
-ruff==0.16.0
+ruff==0.16.5
 twine==7.0.0
 types-psutil==7.2.2.20260518
